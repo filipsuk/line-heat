@@ -1,0 +1,7 @@
+{
+  "name": "line-heat",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ]
+}
