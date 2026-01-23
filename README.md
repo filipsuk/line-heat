@@ -37,6 +37,9 @@ LineHeat sits in between:
 
 It provides awareness without coordination overhead.
 
+In the AI era, parallel changes happen faster and more quietly.
+LineHeat shows where people are actively working so teams avoid collisions and duplicate effort.
+
 ---
 
 ## Intended Use Cases

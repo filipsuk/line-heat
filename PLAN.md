@@ -8,6 +8,7 @@ Create an IDE plugin system that shows live line-level activity across a team, s
 - Define client-server sync model (push vs pull, protocols, auth).
 - Define data flow for line activity signals (capture, aggregate, transmit, decay).
 - Define privacy boundaries and metadata limits (no content sharing).
+- Consider an MCP server so agents can check activity and send signals/info.
 
 ## Data Model (TODOs)
 - Define core entities (activity signal, file identifier, line range, timestamp).
