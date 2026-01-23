@@ -9,6 +9,7 @@
 - Always use TDD: write tests first, then implement.
 - Always add tests for new behavior and bug fixes.
 - Add e2e tests when feasible (for example, VS Code extension flows).
+- Use `__tests__` folder naming for test locations.
 - Definition of done: all tests pass locally.
 
 ## Architecture and Complexity
