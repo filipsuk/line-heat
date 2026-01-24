@@ -76,6 +76,13 @@ If you are not looking at a file, LineHeat shows you nothing about it.
 
 ---
 
+## Invite someone to follow you
+
+Invite-first following keeps privacy intact: someone can follow you **only after you invite them**.  
+Use this when you want a teammate to see what you are working on in real time.
+
+---
+
 ## Non-Goals
 
 LineHeat intentionally does **not**:

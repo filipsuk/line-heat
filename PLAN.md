@@ -8,12 +8,14 @@ Create an IDE plugin system that shows live line-level activity across a team, s
 - Define client-server sync model (push vs pull, protocols, auth).
 - Define data flow for line activity signals (capture, aggregate, transmit, decay).
 - Define privacy boundaries and metadata limits (no content sharing).
+- Define invite-first following rules (users can follow only after being invited).
 - Consider an MCP server so agents can check activity and send signals/info.
 
 ## Data Model (TODOs)
 - Define core entities (activity signal, file identifier, line range, timestamp).
 - Decide identifier strategy (hashing, file paths, workspace IDs).
 - Define retention and decay policies for signals.
+- Add invite relationship metadata and lifecycle (invite, accept, revoke).
 
 ## Backend App (Server) (TODOs)
 - Decide transport layer (websocket, SSE, HTTP polling).
