@@ -1,0 +1,16 @@
+export const PROTOCOL_VERSION = "1.0.0";
+export const MIN_CLIENT_PROTOCOL_VERSION = "1.0.0";
+export const PRESENCE_TTL_SECONDS = 15;
+export const DEFAULT_RETENTION_DAYS = 7;
+export const DISPLAY_NAME_MAX_LENGTH = 64;
+export const EMOJI_MAX_LENGTH = 16;
+export const FILE_PATH_MAX_LENGTH = 512;
+export const EVENT_ROOM_JOIN = "room:join";
+export const EVENT_ROOM_LEAVE = "room:leave";
+export const EVENT_EDIT_PUSH = "edit:push";
+export const EVENT_PRESENCE_SET = "presence:set";
+export const EVENT_PRESENCE_CLEAR = "presence:clear";
+export const EVENT_SERVER_HELLO = "server:hello";
+export const EVENT_SERVER_INCOMPATIBLE = "server:incompatible";
+export const EVENT_ROOM_SNAPSHOT = "room:snapshot";
+export const EVENT_FILE_DELTA = "file:delta";
