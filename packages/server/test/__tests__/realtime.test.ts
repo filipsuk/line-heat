@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { io as createClient } from "socket.io-client";
 
 import {
+  EVENT_EDIT_PUSH,
   EVENT_FILE_DELTA,
   EVENT_PRESENCE_CLEAR,
   EVENT_PRESENCE_SET,
@@ -272,6 +273,77 @@ describe("realtime socket server", () => {
     });
 
     await cleared;
+    clientA.close();
+    clientB.close();
+  });
+
+  it("emits heat delta after edit:push", async () => {
+    serverHandle = await startServer();
+    const clientA = connectClient(serverHandle.port, {
+      userId: "user-a",
+      displayName: "Ada",
+      emoji: "🔥",
+    });
+    const clientB = connectClient(serverHandle.port, {
+      userId: "user-b",
+      displayName: "Grace",
+      emoji: "✨",
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      clientA.emit(
+        EVENT_ROOM_JOIN,
+        { repoId: "repo-1", filePath: "src/index.ts" },
+        (ack: RoomJoinAck) =>
+          ack.ok ? resolve() : reject(new Error(ack.error))
+      );
+    });
+    await new Promise<void>((resolve, reject) => {
+      clientB.emit(
+        EVENT_ROOM_JOIN,
+        { repoId: "repo-1", filePath: "src/index.ts" },
+        (ack: RoomJoinAck) =>
+          ack.ok ? resolve() : reject(new Error(ack.error))
+      );
+    });
+
+    const deltaPromise = waitForDelta(
+      clientB,
+      (payload) =>
+        payload.repoId === "repo-1" &&
+        payload.filePath === "src/index.ts" &&
+        payload.updates.heat?.some((heat) => heat.functionId === "main") === true
+    );
+
+    clientA.emit(EVENT_EDIT_PUSH, {
+      repoId: "repo-1",
+      filePath: "src/index.ts",
+      functionId: "main",
+      anchorLine: 12,
+    });
+
+    const delta = await deltaPromise;
+    
+    expect(delta.repoId).toBe("repo-1");
+    expect(delta.filePath).toBe("src/index.ts");
+    expect(delta.updates.heat).toBeDefined();
+    expect(Array.isArray(delta.updates.heat)).toBe(true);
+    expect(delta.updates.heat?.length).toBeGreaterThan(0);
+
+    const heatUpdate = delta.updates.heat?.find((h) => h.functionId === "main");
+    expect(heatUpdate).toBeDefined();
+    expect(heatUpdate?.functionId).toBe("main");
+    expect(heatUpdate?.anchorLine).toBe(12);
+    expect(heatUpdate?.lastEditAt).toBeTypeOf("number");
+    expect(Array.isArray(heatUpdate?.topEditors)).toBe(true);
+    
+    const editorEntry = heatUpdate?.topEditors?.find((editor) => editor.userId === "user-a");
+    expect(editorEntry).toBeDefined();
+    expect(editorEntry?.userId).toBe("user-a");
+    expect(editorEntry?.displayName).toBe("Ada");
+    expect(editorEntry?.emoji).toBe("🔥");
+    expect(editorEntry?.lastEditAt).toBeTypeOf("number");
+
     clientA.close();
     clientB.close();
   });
