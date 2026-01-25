@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { SqliteEventStore } from "../../src/adapters/sqliteEventStore.js";
 import { replayHeatState } from "../../src/application/heatReplay.js";
-import { getRoomKey } from "../../src/domain/heatState.js";
+import { createHeatState, applyEditEvent, pruneHeatState, getRoomKey } from "../../src/domain/heatState.js";
 import type { StoredEditEvent } from "../../src/domain/heatState.js";
 
 const baseEvent: StoredEditEvent = {
@@ -90,5 +90,76 @@ describe("sqlite event store", () => {
         lastEditAt: 2000,
       },
     ]);
+  });
+
+  describe("pruneHeatState", () => {
+    it("removes functions with lastEditAt below cutoff", () => {
+      const state = createHeatState();
+      
+      applyEditEvent(state, withEvent({ serverTs: 1000, functionId: "old-func" }));
+      applyEditEvent(state, withEvent({ serverTs: 2000, functionId: "new-func" }));
+      
+      pruneHeatState(state, 1500);
+      
+      const room = state.get(getRoomKey(baseEvent.repoId, baseEvent.filePath));
+      expect(room?.functions.has("old-func")).toBe(false);
+      expect(room?.functions.has("new-func")).toBe(true);
+    });
+
+    it("prunes editors with lastEditAt below cutoff", () => {
+      const state = createHeatState();
+      
+      applyEditEvent(state, withEvent({ serverTs: 1000, userId: "user-1" }));
+      applyEditEvent(state, withEvent({ serverTs: 2000, userId: "user-2", displayName: "Grace", emoji: "✨" }));
+      applyEditEvent(state, withEvent({ 
+        serverTs: 3000, 
+        userId: "user-1", 
+        displayName: "Updated User",
+        emoji: "🚀"
+      }));
+      
+      pruneHeatState(state, 1500);
+      
+      const room = state.get(getRoomKey(baseEvent.repoId, baseEvent.filePath));
+      const heatFunction = room?.functions.get(baseEvent.functionId);
+      const actual = heatFunction?.topEditors;
+      expect(actual).toHaveLength(2);
+      expect(actual?.[0].userId).toBe("user-1");
+      expect(actual?.[0].lastEditAt).toBe(3000);
+      expect(actual?.[1].userId).toBe("user-2");
+      expect(actual?.[1].lastEditAt).toBe(2000);
+    });
+
+    it("removes rooms with no remaining functions", () => {
+      const state = createHeatState();
+      
+      applyEditEvent(state, withEvent({ serverTs: 1000, functionId: "old-func" }));
+      applyEditEvent(state, withEvent({ 
+        serverTs: 1000, 
+        filePath: "other/file.ts", 
+        functionId: "another-func" 
+      }));
+      
+      expect(state.size).toBe(2);
+      
+      pruneHeatState(state, 1500);
+      
+      expect(state.size).toBe(0);
+    });
+
+    it("keeps rooms and functions when all are above cutoff", () => {
+      const state = createHeatState();
+      
+      applyEditEvent(state, withEvent({ serverTs: 2000, functionId: "func-1" }));
+      applyEditEvent(state, withEvent({ serverTs: 3000, functionId: "func-2" }));
+      
+      pruneHeatState(state, 1500);
+      
+      expect(state.size).toBe(1);
+      const room = state.get(getRoomKey(baseEvent.repoId, baseEvent.filePath));
+      expect(room?.functions.size).toBe(2);
+      expect(room?.functions.has("func-1")).toBe(true);
+      expect(room?.functions.has("func-2")).toBe(true);
+    });
   });
 });

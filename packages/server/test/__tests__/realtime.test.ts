@@ -10,6 +10,7 @@ import {
   EVENT_PRESENCE_CLEAR,
   EVENT_PRESENCE_SET,
   EVENT_ROOM_JOIN,
+  EVENT_SERVER_INCOMPATIBLE,
   PROTOCOL_VERSION,
 } from "@line-heat/protocol";
 import type { FileDeltaPayload, RoomJoinAck } from "@line-heat/protocol";
@@ -346,5 +347,38 @@ describe("realtime socket server", () => {
 
     clientA.close();
     clientB.close();
+  });
+
+  it("disconnects client with incompatible protocol version", async () => {
+    serverHandle = await startServer();
+    const client = connectClient(serverHandle.port, { 
+      clientProtocolVersion: "2.0.0"
+    });
+
+    const incompatibleEvent = await new Promise<any>((resolve) => {
+      client.on(EVENT_SERVER_INCOMPATIBLE, resolve);
+      
+      const disconnectTimeout = setTimeout(() => {
+        if (client.disconnected) {
+          resolve({ fallback: true });
+        }
+      }, 1000);
+      
+      client.on("disconnect", () => {
+        clearTimeout(disconnectTimeout);
+        resolve({ fallback: true });
+      });
+    });
+
+    expect(incompatibleEvent).toBeDefined();
+    if (!incompatibleEvent.fallback) {
+      expect(incompatibleEvent.serverProtocolVersion).toBe(PROTOCOL_VERSION);
+      expect(incompatibleEvent.minClientProtocolVersion).toBeDefined();
+      expect(incompatibleEvent.message).toContain("major version");
+    }
+    
+    expect(client.disconnected).toBe(true);
+    
+    client.close();
   });
 });
