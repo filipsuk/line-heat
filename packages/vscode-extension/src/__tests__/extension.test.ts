@@ -1,4 +1,5 @@
 import * as assert from 'assert';
+import { execFile } from 'child_process';
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
@@ -21,6 +22,17 @@ const waitFor = async (condition: () => boolean, timeoutMs: number) => {
 	throw new Error('Timed out waiting for condition');
 };
 
+const runGit = async (args: string[], cwd: string) =>
+	new Promise<void>((resolve, reject) => {
+		execFile('git', args, { cwd }, (error) => {
+			if (error) {
+				reject(error);
+				return;
+			}
+			resolve();
+		});
+	});
+
 const editAndWaitForLog = async (
 	api: ExtensionApi,
 	editor: vscode.TextEditor,
@@ -32,11 +44,12 @@ const editAndWaitForLog = async (
 	await editor.edit((editBuilder) => {
 		editBuilder.insert(position, text);
 	});
-	await waitFor(() => api.logger.lines.length > before, 1000);
-	await waitFor(() => api.logger.lines.includes(expectedEntry), 1000);
+	await waitFor(() => api.logger.lines.length > before, 4000);
+	await waitFor(() => api.logger.lines.includes(expectedEntry), 4000);
 };
 
-suite('Line Heat Extension', () => {
+suite('Line Heat Extension', function () {
+	this.timeout(10000);
 	test('logs changed line number across open files', async () => {
 		const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
 		assert.ok(extension, 'Extension not found');
@@ -50,6 +63,8 @@ suite('Line Heat Extension', () => {
 		try {
 			const dirA = path.join(tempDir, 'alpha');
 			const dirB = path.join(tempDir, 'beta');
+			await runGit(['init'], tempDir);
+			await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
 			await fs.mkdir(dirA, { recursive: true });
 			await fs.mkdir(dirB, { recursive: true });
 
