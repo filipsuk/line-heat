@@ -151,6 +151,26 @@ const containerSymbolKinds = new Set<vscode.SymbolKind>([
 	vscode.SymbolKind.Function,
 ]);
 
+const isFunctionSymbol = (symbol: vscode.DocumentSymbol, document: vscode.TextDocument): boolean => {
+	if (functionSymbolKinds.has(symbol.kind)) {
+		return true;
+	}
+	
+	if (symbol.kind === vscode.SymbolKind.Variable) {
+		const line = document.lineAt(symbol.selectionRange.start.line);
+		const text = line.text.trim();
+		
+		const isFunctionExpression = 
+			text.includes('=>') ||
+			text.includes('function') ||
+			text.includes('=') && text.includes('(');
+		
+		return isFunctionExpression;
+	}
+	
+	return false;
+};
+
 const gitTimeoutMs = 1500;
 const maxSubscribedRooms = 10;
 const renderThrottleMs = 200;
@@ -265,6 +285,18 @@ const buildFunctionId = (ancestors: vscode.DocumentSymbol[], symbol: vscode.Docu
 		: functionName;
 };
 
+const convertToDocumentSymbol = (symbol: vscode.SymbolInformation): vscode.DocumentSymbol => ({
+	name: symbol.name,
+	detail: '',
+	kind: symbol.kind,
+	selectionRange: symbol.location.range,
+	range: new vscode.Range(
+		new vscode.Position(symbol.location.range.start.line, 0),
+		symbol.location.range.end
+	),
+	children: [],
+});
+
 const getDocumentSymbols = async (document: vscode.TextDocument, logger?: LineHeatLogger) => {
 	const cacheKey = document.uri.toString();
 	const cached = documentSymbolCache.get(cacheKey);
@@ -284,7 +316,9 @@ const getDocumentSymbols = async (document: vscode.TextDocument, logger?: LineHe
 				const results = await vscode.commands.executeCommand<
 					(vscode.DocumentSymbol | vscode.SymbolInformation)[]
 				>('vscode.executeDocumentSymbolProvider', document.uri);
-				const symbols = (results ?? []).filter(isDocumentSymbol);
+				const symbols = (results ?? []).map(symbol => 
+					isDocumentSymbol(symbol) ? symbol : convertToDocumentSymbol(symbol)
+				);
 				documentSymbolCache.set(cacheKey, { version: document.version, symbols });
 				if (logger) {
 					logger.debug(`lineheat: symbols:refreshed document=${cacheKey} version=${document.version}`);
@@ -300,7 +334,16 @@ const getDocumentSymbols = async (document: vscode.TextDocument, logger?: LineHe
 		const results = await vscode.commands.executeCommand<
 			(vscode.DocumentSymbol | vscode.SymbolInformation)[]
 		>('vscode.executeDocumentSymbolProvider', document.uri);
-		const symbols = (results ?? []).filter(isDocumentSymbol);
+		const symbols = (results ?? []).map(symbol => 
+			isDocumentSymbol(symbol) ? symbol : convertToDocumentSymbol(symbol)
+		);
+		if (logger && document.uri.fsPath.includes('standalone.ts')) {
+			logger.debug(`standalone.ts: raw results=${results?.length ?? 0}, final symbols=${symbols.length}`);
+			for (let i = 0; i < symbols.length; i++) {
+				const symbol = symbols[i];
+				logger.debug(`standalone.ts: symbol ${i}: name=${symbol.name}, kind=${symbol.kind}, range=${symbol.range.start.line}:${symbol.range.start.character}-${symbol.range.end.line}:${symbol.range.end.character}, selectionRange=${symbol.selectionRange.start.line}:${symbol.selectionRange.start.character}-${symbol.selectionRange.end.line}:${symbol.selectionRange.end.character}`);
+			}
+		}
 		documentSymbolCache.set(cacheKey, { version: document.version, symbols });
 		return symbols;
 	} catch {
@@ -312,6 +355,7 @@ const getDocumentSymbols = async (document: vscode.TextDocument, logger?: LineHe
 const resolveFunctionInfoFromSymbols = (
 	symbols: vscode.DocumentSymbol[],
 	position: vscode.Position,
+	document: vscode.TextDocument,
 ): FunctionInfo | null => {
 	let best:
 		| {
@@ -323,11 +367,19 @@ const resolveFunctionInfoFromSymbols = (
 		}
 		| undefined;
 	let order = 0;
+	
+	if (document.uri.fsPath.includes('standalone.ts')) {
+		const logger = activeLogger;
+		if (logger) {
+			logger.debug(`standalone.ts: resolveFunctionInfo position=${position.line}:${position.character}`);
+			logger.debug(`standalone.ts: resolveFunctionInfo symbols count=${symbols.length}`);
+		}
+	}
 	const visit = (symbol: vscode.DocumentSymbol, ancestors: vscode.DocumentSymbol[]) => {
 		const currentOrder = order;
 		order += 1;
 		const nextAncestors = [...ancestors, symbol];
-		if (functionSymbolKinds.has(symbol.kind) && symbol.range.contains(position)) {
+		if (isFunctionSymbol(symbol, document) && symbol.range.contains(position)) {
 			const length = symbol.range.end.line - symbol.range.start.line;
 			const depth = ancestors.length;
 			const functionId = buildFunctionId(ancestors, symbol);
@@ -354,16 +406,19 @@ const resolveFunctionInfoFromSymbols = (
 	for (const symbol of symbols) {
 		visit(symbol, []);
 	}
+	for (const symbol of symbols) {
+		visit(symbol, []);
+	}
 	if (!best) {
 		return null;
 	}
 	return { functionId: best.functionId, anchorLine: best.anchorLine };
 };
 
-const buildDocumentFunctionIndex = (symbols: vscode.DocumentSymbol[]) => {
+const buildDocumentFunctionIndex = (symbols: vscode.DocumentSymbol[], document: vscode.TextDocument) => {
 	const index = new Map<string, FunctionSymbolEntry[]>();
 	const visit = (symbol: vscode.DocumentSymbol, ancestors: vscode.DocumentSymbol[]) => {
-		if (functionSymbolKinds.has(symbol.kind)) {
+		if (isFunctionSymbol(symbol, document)) {
 			const functionId = buildFunctionId(ancestors, symbol);
 			const entry = {
 				functionId,
@@ -392,7 +447,7 @@ const getDocumentFunctionIndex = async (document: vscode.TextDocument, logger?: 
 		return cached.index;
 	}
 	const symbols = await getDocumentSymbols(document, logger);
-	const index = buildDocumentFunctionIndex(symbols);
+	const index = buildDocumentFunctionIndex(symbols, document);
 	documentFunctionIndexCache.set(cacheKey, { version: document.version, index });
 	return index;
 };
@@ -982,7 +1037,7 @@ const updateDesiredPresenceFromEditor = async (editor: vscode.TextEditor | undef
 		return;
 	}
 	const symbols = await getDocumentSymbols(editor.document, logger);
-	const functionInfo = resolveFunctionInfoFromSymbols(symbols, editor.selection.active);
+	const functionInfo = resolveFunctionInfoFromSymbols(symbols, editor.selection.active, editor.document);
 	if (!functionInfo) {
 		desiredPresence = undefined;
 		return;
@@ -1247,7 +1302,9 @@ const renderDecorations = async (logger: LineHeatLogger) => {
 			.filter((editorEntry) => decayMs > 0 && now - editorEntry.lastEditAt <= decayMs)
 			.slice(0, 3)
 			.map(formatUserLabel);
-		const presenceLabels = (presence?.users ?? []).map(formatUserLabel);
+		const presenceLabels = (presence?.users ?? [])
+			.filter(user => user.userId !== userId)
+			.map(formatUserLabel);
 		const tooltip = buildTooltip({
 			functionId,
 			lastEditAt: heat?.lastEditAt,
@@ -1266,20 +1323,24 @@ const renderDecorations = async (logger: LineHeatLogger) => {
 			}
 		}
 		if (presence && presence.users.length > 0) {
-			const topPresence = presence.users.slice(0, 3).map(formatUserLabel);
-			const remaining = presence.users.length - topPresence.length;
-			const afterText =
-				topPresence.length > 0
-					? `${topPresence.join(' ')}${remaining > 0 ? ` +${remaining}` : ''}`
-					: '';
-			if (afterText) {
-				presenceDecorations.push({
-					range: line.range,
-					renderOptions: {
-						after: { contentText: `  ${afterText}` },
-					},
-					hoverMessage: tooltip,
-				});
+			// Filter out current user's presence from display
+			const otherUsers = presence.users.filter(user => user.userId !== userId);
+			if (otherUsers.length > 0) {
+				const topPresence = otherUsers.slice(0, 3).map(formatUserLabel);
+				const remaining = otherUsers.length - topPresence.length;
+				const afterText =
+					topPresence.length > 0
+						? `${topPresence.join(' ')}${remaining > 0 ? ` +${remaining}` : ''}`
+						: '';
+				if (afterText) {
+					presenceDecorations.push({
+						range: line.range,
+						renderOptions: {
+							after: { contentText: `  ${afterText}` },
+						},
+						hoverMessage: tooltip,
+					});
+				}
 			}
 		}
 	}
@@ -1335,7 +1396,7 @@ export function activate(context: vscode.ExtensionContext) {
 			for (const change of event.contentChanges) {
 				const line = change.range.start.line + 1;
 				if (!changesByLine.has(line)) {
-					const functionInfo = resolveFunctionInfoFromSymbols(symbols, change.range.start);
+					const functionInfo = resolveFunctionInfoFromSymbols(symbols, change.range.start, event.document);
 					changesByLine.set(line, functionInfo);
 					if (functionInfo && !functionUpdates.has(functionInfo.functionId)) {
 						functionUpdates.set(functionInfo.functionId, functionInfo);

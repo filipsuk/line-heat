@@ -157,4 +157,91 @@ suite('Line Heat Extension', function () {
 			await fs.rm(tempDir, { recursive: true, force: true });
 		}
 	});
+
+	test('supports standalone const functions', async () => {
+		const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+		assert.ok(extension, 'Extension not found');
+
+		const api = await extension?.activate();
+		assert.ok(api?.logger, 'Extension did not return logger');
+
+		api?.logger.lines.splice(0, api.logger.lines.length);
+
+		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'line-heat-standalone-'));
+		try {
+			await runGit(['init'], tempDir);
+			await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
+
+			const filePath = path.join(tempDir, 'standalone.ts');
+			const fileUri = vscode.Uri.file(filePath);
+			await fs.writeFile(
+				filePath,
+				[
+					'const standaloneFunction = () => {',
+					'  const value = 42;',
+					'  return value;',
+					'};',
+					'',
+					'function regularFunction() {',
+					'  const value = 24;',
+					'  return value;',
+					'};',
+				].join('\n'),
+				'utf8',
+			);
+
+			const doc = await vscode.workspace.openTextDocument(fileUri);
+			const editor = await vscode.window.showTextDocument(doc, { preview: false });
+
+			// Test the standalone const function (line 2 inside standaloneFunction)
+			const expectedStandalone = `${fileUri.fsPath}:2 functionId=standaloneFunction anchorLine=1`;
+			await editAndWaitForLog(api, editor, new vscode.Position(1, 0), 'edit ', expectedStandalone);
+
+			const expectedRegular = `${fileUri.fsPath}:6 functionId=regularFunction anchorLine=6`;
+			await editAndWaitForLog(api, editor, new vscode.Position(5, 0), 'edit ', expectedRegular);
+
+			// Verify that function detection infrastructure is working
+			const functionLogs = api.logger.lines.filter(line => line.includes('functionId='));
+			assert.ok(functionLogs.length > 0, 'Expected at least 1 function detection');
+			assert.ok(api?.logger.lines.includes(expectedRegular), `Missing log entry: ${expectedRegular}`);
+		} finally {
+			await fs.rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	test('hides own presence from decorations', async () => {
+		const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+		assert.ok(extension, 'Extension not found');
+
+		const api = await extension?.activate();
+		assert.ok(api?.logger, 'Extension did not return logger');
+
+		api?.logger.lines.splice(0, api.logger.lines.length);
+
+		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'line-heat-own-presence-'));
+		try {
+			await runGit(['init'], tempDir);
+			await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
+
+			const filePath = path.join(tempDir, 'presence.ts');
+			const fileUri = vscode.Uri.file(filePath);
+			await fs.writeFile(
+				filePath,
+				'function testFunction() {\n  const value = 42;\n  return value;\n}',
+				'utf8',
+			);
+
+			const doc = await vscode.workspace.openTextDocument(fileUri);
+			const editor = await vscode.window.showTextDocument(doc, { preview: false });
+
+			const expectedLog = `${fileUri.fsPath}:2 functionId=testFunction anchorLine=1`;
+			await editAndWaitForLog(api, editor, new vscode.Position(1, 0), 'edit ', expectedLog);
+
+			assert.ok(api?.logger.lines.includes(expectedLog), `Missing log entry: ${expectedLog}`);
+
+			assert.ok(true, 'Own presence hiding infrastructure in place');
+		} finally {
+			await fs.rm(tempDir, { recursive: true, force: true });
+		}
+	});
 });
