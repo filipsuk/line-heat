@@ -4,7 +4,12 @@ import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import type { ServerHelloPayload, ServerIncompatiblePayload } from '@line-heat/protocol' with {
+import type {
+	FileDeltaPayload,
+	RoomSnapshotPayload,
+	ServerHelloPayload,
+	ServerIncompatiblePayload,
+} from '@line-heat/protocol' with {
 	'resolution-mode': 'require',
 };
 import { io, Socket } from 'socket.io-client';
@@ -21,6 +26,8 @@ type ProtocolModule = {
 	EVENT_PRESENCE_CLEAR: string;
 	EVENT_SERVER_HELLO: string;
 	EVENT_SERVER_INCOMPATIBLE: string;
+	EVENT_ROOM_SNAPSHOT: string;
+	EVENT_FILE_DELTA: string;
 };
 
 type LineHeatSettings = {
@@ -73,6 +80,17 @@ type PresenceState = {
 	anchorLine: number;
 };
 
+type RoomState = {
+	heatByFunctionId: Map<string, RoomSnapshotPayload['functions'][number]>;
+	presenceByFunctionId: Map<string, RoomSnapshotPayload['presence'][number]>;
+};
+
+type FunctionSymbolEntry = {
+	functionId: string;
+	anchorLine: number;
+	range: vscode.Range;
+};
+
 const USER_ID_KEY = 'lineheat.userId';
 
 const logLevelWeight: Record<LogLevel, number> = {
@@ -101,12 +119,20 @@ let mruRooms: RoomKey[] = [];
 let desiredPresence: PresenceState | undefined;
 let activePresence: PresenceState | undefined;
 let presenceKeepaliveTimer: NodeJS.Timeout | undefined;
+let renderTimer: NodeJS.Timeout | undefined;
+let lastDecoratedEditor: vscode.TextEditor | undefined;
+
+const roomStateByKey = new Map<RoomKey, RoomState>();
 
 const gitRootCache = new Map<string, Promise<string | undefined>>();
 const repoIdCache = new Map<string, Promise<string | undefined>>();
 const fileRepoCache = new Map<string, Promise<RepoContext | undefined>>();
 
 const documentSymbolCache = new Map<string, { version: number; symbols: vscode.DocumentSymbol[] }>();
+const documentFunctionIndexCache = new Map<
+	string,
+	{ version: number; index: Map<string, FunctionSymbolEntry[]> }
+>();
 
 const functionSymbolKinds = new Set<vscode.SymbolKind>([
 	vscode.SymbolKind.Function,
@@ -123,6 +149,11 @@ const containerSymbolKinds = new Set<vscode.SymbolKind>([
 
 const gitTimeoutMs = 1500;
 const maxSubscribedRooms = 10;
+const renderThrottleMs = 200;
+
+const heatDecorationTypes = new Map<string, vscode.TextEditorDecorationType>();
+let presenceDecorationType: vscode.TextEditorDecorationType | undefined;
+const unmappedFunctionLogTimestamps = new Map<string, number>();
 
 const createLogger = (level: LogLevel): LineHeatLogger => {
 	const output = vscode.window.createOutputChannel('LineHeat', { log: true });
@@ -156,9 +187,79 @@ const normalizeString = (value: string | undefined) => value?.trim() ?? '';
 
 const encodeSymbolName = (name: string) => encodeURIComponent(name.trim());
 
+const formatFunctionLabel = (functionId: string) =>
+	functionId
+		.split('/')
+		.map((segment) => {
+			try {
+				return decodeURIComponent(segment);
+			} catch {
+				return segment;
+			}
+		})
+		.join('/');
+
+const formatRelativeTime = (now: number, timestamp: number) => {
+	const diffMs = Math.max(0, now - timestamp);
+	const seconds = Math.floor(diffMs / 1000);
+	if (seconds < 60) {
+		return `${seconds}s ago`;
+	}
+	const minutes = Math.floor(seconds / 60);
+	if (minutes < 60) {
+		return `${minutes}m ago`;
+	}
+	const hours = Math.floor(minutes / 60);
+	if (hours < 24) {
+		return `${hours}h ago`;
+	}
+	const days = Math.floor(hours / 24);
+	return `${days}d ago`;
+};
+
+const formatUserLabel = (user: { emoji: string; displayName: string }) =>
+	`${user.emoji} ${user.displayName}`.trim();
+
+const getHeatDecorationType = (alpha: number) => {
+	const clampedAlpha = Math.min(0.3, Math.max(0, alpha));
+	const alphaKey = clampedAlpha.toFixed(3);
+	const cached = heatDecorationTypes.get(alphaKey);
+	if (cached) {
+		return cached;
+	}
+	const decoration = vscode.window.createTextEditorDecorationType({
+		isWholeLine: true,
+		backgroundColor: `rgba(255, 176, 32, ${alphaKey})`,
+	});
+	heatDecorationTypes.set(alphaKey, decoration);
+	return decoration;
+};
+
+const getPresenceDecorationType = () => {
+	if (!presenceDecorationType) {
+		presenceDecorationType = vscode.window.createTextEditorDecorationType({
+			after: {
+				color: new vscode.ThemeColor('editorCodeLens.foreground'),
+				margin: '0 0 0 1rem',
+			},
+		});
+	}
+	return presenceDecorationType;
+};
+
 const isDocumentSymbol = (
 	symbol: vscode.DocumentSymbol | vscode.SymbolInformation,
 ): symbol is vscode.DocumentSymbol => 'selectionRange' in symbol;
+
+const buildFunctionId = (ancestors: vscode.DocumentSymbol[], symbol: vscode.DocumentSymbol) => {
+	const containerSegments = ancestors
+		.filter((ancestor) => containerSymbolKinds.has(ancestor.kind))
+		.map((ancestor) => encodeSymbolName(ancestor.name));
+	const functionName = encodeSymbolName(symbol.name);
+	return containerSegments.length > 0
+		? `${containerSegments.join('/')}/${functionName}`
+		: functionName;
+};
 
 const getDocumentSymbols = async (document: vscode.TextDocument) => {
 	const cacheKey = document.uri.toString();
@@ -200,14 +301,7 @@ const resolveFunctionInfoFromSymbols = (
 		if (functionSymbolKinds.has(symbol.kind) && symbol.range.contains(position)) {
 			const length = symbol.range.end.line - symbol.range.start.line;
 			const depth = ancestors.length;
-			const containerSegments = ancestors
-				.filter((ancestor) => containerSymbolKinds.has(ancestor.kind))
-				.map((ancestor) => encodeSymbolName(ancestor.name));
-			const functionName = encodeSymbolName(symbol.name);
-			const functionId =
-				containerSegments.length > 0
-					? `${containerSegments.join('/')}/${functionName}`
-					: functionName;
+			const functionId = buildFunctionId(ancestors, symbol);
 			const anchorLine = symbol.selectionRange.start.line + 1;
 			const candidate = { functionId, anchorLine, length, depth, order: currentOrder };
 			if (!best) {
@@ -235,6 +329,43 @@ const resolveFunctionInfoFromSymbols = (
 		return null;
 	}
 	return { functionId: best.functionId, anchorLine: best.anchorLine };
+};
+
+const buildDocumentFunctionIndex = (symbols: vscode.DocumentSymbol[]) => {
+	const index = new Map<string, FunctionSymbolEntry[]>();
+	const visit = (symbol: vscode.DocumentSymbol, ancestors: vscode.DocumentSymbol[]) => {
+		if (functionSymbolKinds.has(symbol.kind)) {
+			const functionId = buildFunctionId(ancestors, symbol);
+			const entry = {
+				functionId,
+				anchorLine: symbol.selectionRange.start.line + 1,
+				range: symbol.range,
+			};
+			const list = index.get(functionId) ?? [];
+			list.push(entry);
+			index.set(functionId, list);
+		}
+		const nextAncestors = [...ancestors, symbol];
+		for (const child of symbol.children) {
+			visit(child, nextAncestors);
+		}
+	};
+	for (const symbol of symbols) {
+		visit(symbol, []);
+	}
+	return index;
+};
+
+const getDocumentFunctionIndex = async (document: vscode.TextDocument) => {
+	const cacheKey = document.uri.toString();
+	const cached = documentFunctionIndexCache.get(cacheKey);
+	if (cached && cached.version === document.version) {
+		return cached.index;
+	}
+	const symbols = await getDocumentSymbols(document);
+	const index = buildDocumentFunctionIndex(symbols);
+	documentFunctionIndexCache.set(cacheKey, { version: document.version, index });
+	return index;
 };
 
 const isSameRoom = (left: RoomContext | undefined, right: RoomContext | undefined) =>
@@ -336,7 +467,13 @@ const disconnectSocket = () => {
 	activeSocket = undefined;
 	joinedRooms.clear();
 	activePresence = undefined;
+	roomStateByKey.clear();
+	unmappedFunctionLogTimestamps.clear();
 	retentionDays = getDefaultRetentionDays();
+	if (lastDecoratedEditor) {
+		clearDecorations(lastDecoratedEditor);
+		lastDecoratedEditor = undefined;
+	}
 };
 
 const connectSocket = (
@@ -390,11 +527,39 @@ const connectSocket = (
 		updateStatusBar();
 	});
 
+	socket.on(protocol.EVENT_ROOM_SNAPSHOT, (payload: RoomSnapshotPayload) => {
+		updateRoomStateFromSnapshot(payload);
+		if (
+			activeRoomContext &&
+			payload.repoId === activeRoomContext.repoId &&
+			payload.filePath === activeRoomContext.filePath
+		) {
+			scheduleRender(logger);
+		}
+	});
+
+	socket.on(protocol.EVENT_FILE_DELTA, (payload: FileDeltaPayload) => {
+		updateRoomStateFromDelta(payload);
+		if (
+			activeRoomContext &&
+			payload.repoId === activeRoomContext.repoId &&
+			payload.filePath === activeRoomContext.filePath
+		) {
+			scheduleRender(logger);
+		}
+	});
+
 	socket.on('disconnect', (reason) => {
 		logger.warn(`disconnected: ${reason}`);
 		retentionDays = getDefaultRetentionDays();
 		joinedRooms.clear();
 		activePresence = undefined;
+		roomStateByKey.clear();
+		unmappedFunctionLogTimestamps.clear();
+		if (lastDecoratedEditor) {
+			clearDecorations(lastDecoratedEditor);
+			lastDecoratedEditor = undefined;
+		}
 		updateStatusBar();
 	});
 
@@ -740,6 +905,7 @@ const syncRoomsWithSocket = (logger: LineHeatLogger) => {
 			}
 			emitRoomLeave(logger, room);
 			joinedRooms.delete(roomKey);
+			roomStateByKey.delete(roomKey);
 		}
 	}
 	for (const roomKey of limitedRooms) {
@@ -872,6 +1038,7 @@ const updateActiveEditorState = async (
 	syncRoomsWithSocket(logger);
 	await updateDesiredPresenceFromEditor(editor);
 	syncPresenceWithSocket(logger);
+	scheduleRender(logger);
 };
 
 const ensurePresenceKeepalive = (logger: LineHeatLogger) => {
@@ -884,6 +1051,228 @@ const ensurePresenceKeepalive = (logger: LineHeatLogger) => {
 		}
 		emitPresenceSet(logger, activePresence);
 	}, 5000);
+};
+
+const updateRoomStateFromSnapshot = (payload: RoomSnapshotPayload) => {
+	const roomKey = getRoomKey({ repoId: payload.repoId, filePath: payload.filePath });
+	const heatByFunctionId = new Map<string, RoomSnapshotPayload['functions'][number]>();
+	const presenceByFunctionId = new Map<string, RoomSnapshotPayload['presence'][number]>();
+	for (const heat of payload.functions) {
+		heatByFunctionId.set(heat.functionId, heat);
+	}
+	for (const presence of payload.presence) {
+		if (presence.users.length > 0) {
+			presenceByFunctionId.set(presence.functionId, presence);
+		}
+	}
+	roomStateByKey.set(roomKey, { heatByFunctionId, presenceByFunctionId });
+};
+
+const updateRoomStateFromDelta = (payload: FileDeltaPayload) => {
+	const roomKey = getRoomKey({ repoId: payload.repoId, filePath: payload.filePath });
+	const current = roomStateByKey.get(roomKey) ?? {
+		heatByFunctionId: new Map<string, RoomSnapshotPayload['functions'][number]>(),
+		presenceByFunctionId: new Map<string, RoomSnapshotPayload['presence'][number]>(),
+	};
+	const heatUpdates = payload.updates.heat ?? [];
+	const presenceUpdates = payload.updates.presence ?? [];
+	for (const heat of heatUpdates) {
+		current.heatByFunctionId.set(heat.functionId, heat);
+	}
+	for (const presence of presenceUpdates) {
+		if (presence.users.length > 0) {
+			current.presenceByFunctionId.set(presence.functionId, presence);
+		} else {
+			current.presenceByFunctionId.delete(presence.functionId);
+		}
+	}
+	roomStateByKey.set(roomKey, current);
+};
+
+const logUnmappedFunction = (logger: LineHeatLogger, roomKey: string, functionId: string) => {
+	const key = `${roomKey}:${functionId}`;
+	const now = Date.now();
+	const lastLogged = unmappedFunctionLogTimestamps.get(key) ?? 0;
+	if (now - lastLogged < 30000) {
+		return;
+	}
+	unmappedFunctionLogTimestamps.set(key, now);
+	logger.debug(`lineheat: unmapped functionId=${functionId}`);
+};
+
+const resolveFunctionSymbolEntry = (
+	index: Map<string, FunctionSymbolEntry[]>,
+	functionId: string,
+	anchorLine: number,
+) => {
+	const entries = index.get(functionId);
+	if (!entries || entries.length === 0) {
+		return undefined;
+	}
+	if (entries.length === 1) {
+		return entries[0];
+	}
+	let best = entries[0];
+	let bestDistance = Math.abs(entries[0].anchorLine - anchorLine);
+	for (const entry of entries.slice(1)) {
+		const distance = Math.abs(entry.anchorLine - anchorLine);
+		if (distance < bestDistance) {
+			best = entry;
+			bestDistance = distance;
+		}
+	}
+	return best;
+};
+
+const buildTooltip = (params: {
+	functionId: string;
+	lastEditAt?: number;
+	editorLabels: string[];
+	presenceLabels: string[];
+}) => {
+	const tooltip = new vscode.MarkdownString();
+	const label = formatFunctionLabel(params.functionId);
+	tooltip.appendText(`Function: ${label}`);
+	tooltip.appendMarkdown('\n\n');
+	if (params.lastEditAt) {
+		tooltip.appendText(`Last edit: ${formatRelativeTime(Date.now(), params.lastEditAt)}`);
+	} else {
+		tooltip.appendText('Last edit: none');
+	}
+	tooltip.appendMarkdown('\n\n');
+	tooltip.appendText(
+		`Editors: ${params.editorLabels.length > 0 ? params.editorLabels.join(', ') : 'none'}`,
+	);
+	tooltip.appendMarkdown('\n\n');
+	tooltip.appendText(
+		`Presence: ${params.presenceLabels.length > 0 ? params.presenceLabels.join(', ') : 'none'}`,
+	);
+	tooltip.appendMarkdown('\n\n');
+	tooltip.appendText(`Retention: ${retentionDays}d`);
+	return tooltip;
+};
+
+const clearDecorations = (editor: vscode.TextEditor) => {
+	for (const decoration of heatDecorationTypes.values()) {
+		editor.setDecorations(decoration, []);
+	}
+	if (presenceDecorationType) {
+		editor.setDecorations(presenceDecorationType, []);
+	}
+};
+
+const renderDecorations = async (logger: LineHeatLogger) => {
+	const editor = vscode.window.activeTextEditor;
+	if (!editor || editor.document.uri.scheme !== 'file') {
+		if (lastDecoratedEditor) {
+			clearDecorations(lastDecoratedEditor);
+			lastDecoratedEditor = undefined;
+		}
+		return;
+	}
+	if (lastDecoratedEditor && lastDecoratedEditor !== editor) {
+		clearDecorations(lastDecoratedEditor);
+	}
+	lastDecoratedEditor = editor;
+	if (!activeRoomContext) {
+		clearDecorations(editor);
+		return;
+	}
+	const roomKey = getRoomKey(activeRoomContext);
+	const roomState = roomStateByKey.get(roomKey);
+	if (!roomState) {
+		clearDecorations(editor);
+		return;
+	}
+	const index = await getDocumentFunctionIndex(editor.document);
+	if (index.size === 0) {
+		clearDecorations(editor);
+		return;
+	}
+	const decayHours = currentSettings?.heatDecayHours ?? 24;
+	const decayMs = decayHours > 0 ? decayHours * 60 * 60 * 1000 : 0;
+	const now = Date.now();
+	const heatDecorations = new Map<string, vscode.DecorationOptions[]>();
+	const presenceDecorations: vscode.DecorationOptions[] = [];
+	const functionIds = new Set<string>([
+		...roomState.heatByFunctionId.keys(),
+		...roomState.presenceByFunctionId.keys(),
+	]);
+	for (const functionId of functionIds) {
+		const heat = roomState.heatByFunctionId.get(functionId);
+		const presence = roomState.presenceByFunctionId.get(functionId);
+		const anchorLine = heat?.anchorLine ?? presence?.anchorLine;
+		if (!anchorLine) {
+			continue;
+		}
+		const entry = resolveFunctionSymbolEntry(index, functionId, anchorLine);
+		if (!entry) {
+			logUnmappedFunction(logger, roomKey, functionId);
+			continue;
+		}
+		const line = editor.document.lineAt(entry.anchorLine - 1);
+		const editorLabels = (heat?.topEditors ?? [])
+			.filter((editorEntry) => decayMs > 0 && now - editorEntry.lastEditAt <= decayMs)
+			.slice(0, 3)
+			.map(formatUserLabel);
+		const presenceLabels = (presence?.users ?? []).map(formatUserLabel);
+		const tooltip = buildTooltip({
+			functionId,
+			lastEditAt: heat?.lastEditAt,
+			editorLabels,
+			presenceLabels,
+		});
+		if (heat && decayMs > 0) {
+			const ageMs = Math.max(0, now - heat.lastEditAt);
+			const intensity = Math.min(1, Math.max(0, 1 - ageMs / decayMs));
+			if (intensity > 0) {
+				const alpha = 0.05 + 0.25 * intensity;
+				const alphaKey = Math.min(0.3, alpha).toFixed(3);
+				const list = heatDecorations.get(alphaKey) ?? [];
+				list.push({ range: line.range, hoverMessage: tooltip });
+				heatDecorations.set(alphaKey, list);
+			}
+		}
+		if (presence && presence.users.length > 0) {
+			const topPresence = presence.users.slice(0, 3).map(formatUserLabel);
+			const remaining = presence.users.length - topPresence.length;
+			const afterText =
+				topPresence.length > 0
+					? `${topPresence.join(' ')}${remaining > 0 ? ` +${remaining}` : ''}`
+					: '';
+			if (afterText) {
+				presenceDecorations.push({
+					range: line.range,
+					renderOptions: {
+						after: { contentText: `  ${afterText}` },
+					},
+					hoverMessage: tooltip,
+				});
+			}
+		}
+	}
+	const presenceType = getPresenceDecorationType();
+	for (const [alphaKey, decorations] of heatDecorations.entries()) {
+		const alpha = Number(alphaKey);
+		const decorationType = getHeatDecorationType(alpha);
+		editor.setDecorations(decorationType, decorations);
+	}
+	for (const [alphaKey, decorationType] of heatDecorationTypes.entries()) {
+		if (!heatDecorations.has(alphaKey)) {
+			editor.setDecorations(decorationType, []);
+		}
+	}
+	editor.setDecorations(presenceType, presenceDecorations);
+};
+
+const scheduleRender = (logger: LineHeatLogger) => {
+	if (renderTimer) {
+		return;
+	}
+	renderTimer = setTimeout(() => {
+		renderTimer = undefined;
+		void renderDecorations(logger);
+	}, renderThrottleMs);
 };
 
 export function activate(context: vscode.ExtensionContext) {
@@ -948,7 +1337,11 @@ export function activate(context: vscode.ExtensionContext) {
 		if (!event.affectsConfiguration('lineheat')) {
 			return;
 		}
+		const shouldRender = event.affectsConfiguration('lineheat.heatDecayHours');
 		refreshConnection(logger);
+		if (shouldRender) {
+			scheduleRender(logger);
+		}
 	});
 
 	const onEditorDisposable = vscode.window.onDidChangeActiveTextEditor((editor) => {
@@ -1007,8 +1400,26 @@ export function getLoggerForTests(): { lines: string[] } | undefined {
 	mruRooms = [];
 	desiredPresence = undefined;
 	activePresence = undefined;
+	roomStateByKey.clear();
+	unmappedFunctionLogTimestamps.clear();
 	if (presenceKeepaliveTimer) {
 		clearInterval(presenceKeepaliveTimer);
 		presenceKeepaliveTimer = undefined;
 	}
+	if (renderTimer) {
+		clearTimeout(renderTimer);
+		renderTimer = undefined;
+	}
+	if (lastDecoratedEditor) {
+		clearDecorations(lastDecoratedEditor);
+		lastDecoratedEditor = undefined;
+	}
+	if (presenceDecorationType) {
+		presenceDecorationType.dispose();
+		presenceDecorationType = undefined;
+	}
+	for (const decoration of heatDecorationTypes.values()) {
+		decoration.dispose();
+	}
+	heatDecorationTypes.clear();
 }
