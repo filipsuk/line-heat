@@ -357,25 +357,27 @@ describe("realtime socket server", () => {
 
     const incompatibleEvent = await new Promise<any>((resolve) => {
       client.on(EVENT_SERVER_INCOMPATIBLE, resolve);
-      
-      const disconnectTimeout = setTimeout(() => {
-        if (client.disconnected) {
-          resolve({ fallback: true });
-        }
-      }, 1000);
-      
-      client.on("disconnect", () => {
-        clearTimeout(disconnectTimeout);
-        resolve({ fallback: true });
-      });
     });
 
     expect(incompatibleEvent).toBeDefined();
-    if (!incompatibleEvent.fallback) {
-      expect(incompatibleEvent.serverProtocolVersion).toBe(PROTOCOL_VERSION);
-      expect(incompatibleEvent.minClientProtocolVersion).toBeDefined();
-      expect(incompatibleEvent.message).toContain("major version");
-    }
+    expect(incompatibleEvent.serverProtocolVersion).toBe(PROTOCOL_VERSION);
+    expect(incompatibleEvent.minClientProtocolVersion).toBeDefined();
+    expect(incompatibleEvent.message).toContain("major version");
+    
+    await new Promise<void>((resolve, reject) => {
+      if (client.disconnected) {
+        resolve();
+        return;
+      }
+      
+      client.on("disconnect", () => {
+        resolve();
+      });
+      
+      setTimeout(() => {
+        reject(new Error("Client did not disconnect within timeout"));
+      }, 1000);
+    });
     
     expect(client.disconnected).toBe(true);
     
