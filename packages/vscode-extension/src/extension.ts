@@ -9,9 +9,9 @@ import type {
 	RoomSnapshotPayload,
 	ServerHelloPayload,
 	ServerIncompatiblePayload,
-} from '@line-heat/protocol' with {
-	'resolution-mode': 'require',
-};
+	} from '@line-heat/protocol' with {
+		'resolution-mode': 'require',
+	};
 import { io, Socket } from 'socket.io-client';
 
 type LogLevel = 'error' | 'warn' | 'info' | 'debug';
