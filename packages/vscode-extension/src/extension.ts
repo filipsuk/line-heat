@@ -107,6 +107,7 @@ let userId: string | undefined;
 let retentionDays: number = 7;
 let currentSettings: LineHeatSettings | undefined;
 let missingConfigLogged = false;
+let protocolIncompatPopupShown = false;
 let protocolModule: ProtocolModule | undefined;
 let activeRepoState: RepoState = { status: 'unknown' };
 let noGitLogged = false;
@@ -133,6 +134,9 @@ const documentFunctionIndexCache = new Map<
 	string,
 	{ version: number; index: Map<string, FunctionSymbolEntry[]> }
 >();
+
+const documentSymbolDebounceTimers = new Map<string, NodeJS.Timeout>();
+const symbolDebounceMs = 250;
 
 const functionSymbolKinds = new Set<vscode.SymbolKind>([
 	vscode.SymbolKind.Function,
@@ -261,12 +265,37 @@ const buildFunctionId = (ancestors: vscode.DocumentSymbol[], symbol: vscode.Docu
 		: functionName;
 };
 
-const getDocumentSymbols = async (document: vscode.TextDocument) => {
+const getDocumentSymbols = async (document: vscode.TextDocument, logger?: LineHeatLogger) => {
 	const cacheKey = document.uri.toString();
 	const cached = documentSymbolCache.get(cacheKey);
 	if (cached && cached.version === document.version) {
 		return cached.symbols;
 	}
+	
+	const existingTimer = documentSymbolDebounceTimers.get(cacheKey);
+	if (existingTimer) {
+		clearTimeout(existingTimer);
+	}
+	
+	if (cached) {
+		documentSymbolDebounceTimers.set(cacheKey, setTimeout(async () => {
+			documentSymbolDebounceTimers.delete(cacheKey);
+			try {
+				const results = await vscode.commands.executeCommand<
+					(vscode.DocumentSymbol | vscode.SymbolInformation)[]
+				>('vscode.executeDocumentSymbolProvider', document.uri);
+				const symbols = (results ?? []).filter(isDocumentSymbol);
+				documentSymbolCache.set(cacheKey, { version: document.version, symbols });
+				if (logger) {
+					logger.debug(`lineheat: symbols:refreshed document=${cacheKey} version=${document.version}`);
+				}
+			} catch {
+				documentSymbolCache.set(cacheKey, { version: document.version, symbols: [] });
+			}
+		}, symbolDebounceMs));
+		return cached.symbols;
+	}
+	
 	try {
 		const results = await vscode.commands.executeCommand<
 			(vscode.DocumentSymbol | vscode.SymbolInformation)[]
@@ -356,13 +385,13 @@ const buildDocumentFunctionIndex = (symbols: vscode.DocumentSymbol[]) => {
 	return index;
 };
 
-const getDocumentFunctionIndex = async (document: vscode.TextDocument) => {
+const getDocumentFunctionIndex = async (document: vscode.TextDocument, logger?: LineHeatLogger) => {
 	const cacheKey = document.uri.toString();
 	const cached = documentFunctionIndexCache.get(cacheKey);
 	if (cached && cached.version === document.version) {
 		return cached.index;
 	}
-	const symbols = await getDocumentSymbols(document);
+	const symbols = await getDocumentSymbols(document, logger);
 	const index = buildDocumentFunctionIndex(symbols);
 	documentFunctionIndexCache.set(cacheKey, { version: document.version, index });
 	return index;
@@ -520,9 +549,12 @@ const connectSocket = (
 		logger.warn(
 			`server:incompatible server=${payload.serverProtocolVersion} minClient=${payload.minClientProtocolVersion}`,
 		);
-		void vscode.window.showWarningMessage(
-			`LineHeat protocol incompatible. Please update the extension. ${payload.message}`,
-		);
+		if (!protocolIncompatPopupShown) {
+			protocolIncompatPopupShown = true;
+			void vscode.window.showWarningMessage(
+				`LineHeat protocol incompatible. Please update the extension. ${payload.message}`,
+			);
+		}
 		socket.disconnect();
 		updateStatusBar();
 	});
@@ -940,7 +972,7 @@ const syncPresenceWithSocket = (logger: LineHeatLogger) => {
 	}
 };
 
-const updateDesiredPresenceFromEditor = async (editor: vscode.TextEditor | undefined) => {
+const updateDesiredPresenceFromEditor = async (editor: vscode.TextEditor | undefined, logger?: LineHeatLogger) => {
 	if (!editor || editor.document.uri.scheme !== 'file') {
 		desiredPresence = undefined;
 		return;
@@ -949,7 +981,7 @@ const updateDesiredPresenceFromEditor = async (editor: vscode.TextEditor | undef
 		desiredPresence = undefined;
 		return;
 	}
-	const symbols = await getDocumentSymbols(editor.document);
+	const symbols = await getDocumentSymbols(editor.document, logger);
 	const functionInfo = resolveFunctionInfoFromSymbols(symbols, editor.selection.active);
 	if (!functionInfo) {
 		desiredPresence = undefined;
@@ -1036,7 +1068,7 @@ const updateActiveEditorState = async (
 		mruRooms = [activeRoomKey, ...mruRooms.filter((roomKey) => roomKey !== activeRoomKey)];
 	}
 	syncRoomsWithSocket(logger);
-	await updateDesiredPresenceFromEditor(editor);
+	await updateDesiredPresenceFromEditor(editor, logger);
 	syncPresenceWithSocket(logger);
 	scheduleRender(logger);
 };
@@ -1184,7 +1216,7 @@ const renderDecorations = async (logger: LineHeatLogger) => {
 		clearDecorations(editor);
 		return;
 	}
-	const index = await getDocumentFunctionIndex(editor.document);
+	const index = await getDocumentFunctionIndex(editor.document, logger);
 	if (index.size === 0) {
 		clearDecorations(editor);
 		return;
@@ -1297,7 +1329,7 @@ export function activate(context: vscode.ExtensionContext) {
 			if (!context) {
 				logNoGitOnce(logger);
 			}
-			const symbols = await getDocumentSymbols(event.document);
+			const symbols = await getDocumentSymbols(event.document, logger);
 			const changesByLine = new Map<number, FunctionInfo | null>();
 			const functionUpdates = new Map<string, FunctionInfo>();
 			for (const change of event.contentChanges) {
@@ -1360,7 +1392,7 @@ export function activate(context: vscode.ExtensionContext) {
 			return;
 		}
 		void (async () => {
-			await updateDesiredPresenceFromEditor(event.textEditor);
+			await updateDesiredPresenceFromEditor(event.textEditor, logger);
 			syncPresenceWithSocket(logger);
 		})();
 	});
@@ -1402,6 +1434,10 @@ export function getLoggerForTests(): { lines: string[] } | undefined {
 	activePresence = undefined;
 	roomStateByKey.clear();
 	unmappedFunctionLogTimestamps.clear();
+	for (const timer of documentSymbolDebounceTimers.values()) {
+		clearTimeout(timer);
+	}
+	documentSymbolDebounceTimers.clear();
 	if (presenceKeepaliveTimer) {
 		clearInterval(presenceKeepaliveTimer);
 		presenceKeepaliveTimer = undefined;
