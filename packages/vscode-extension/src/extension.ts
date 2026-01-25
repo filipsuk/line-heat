@@ -54,6 +54,8 @@ type RoomContext = {
 	filePath: string;
 };
 
+type RoomKey = string;
+
 type RepoState = {
 	status: 'unknown' | 'nogit' | 'ready';
 	context?: RepoContext;
@@ -91,8 +93,11 @@ let protocolModule: ProtocolModule | undefined;
 let activeRepoState: RepoState = { status: 'unknown' };
 let noGitLogged = false;
 
-let desiredRoomContext: RoomContext | undefined;
-let joinedRoomContext: RoomContext | undefined;
+let activeRoomContext: RoomContext | undefined;
+let desiredRooms = new Map<RoomKey, RoomContext>();
+let joinedRooms = new Map<RoomKey, RoomContext>();
+let openRoomCounts = new Map<RoomKey, number>();
+let mruRooms: RoomKey[] = [];
 let desiredPresence: PresenceState | undefined;
 let activePresence: PresenceState | undefined;
 let presenceKeepaliveTimer: NodeJS.Timeout | undefined;
@@ -117,6 +122,7 @@ const containerSymbolKinds = new Set<vscode.SymbolKind>([
 ]);
 
 const gitTimeoutMs = 1500;
+const maxSubscribedRooms = 10;
 
 const createLogger = (level: LogLevel): LineHeatLogger => {
 	const output = vscode.window.createOutputChannel('LineHeat', { log: true });
@@ -240,6 +246,8 @@ const isSamePresence = (left: PresenceState | undefined, right: PresenceState | 
 	left?.functionId === right?.functionId &&
 	left?.anchorLine === right?.anchorLine;
 
+const getRoomKey = (room: RoomContext): RoomKey => `${room.repoId}:${room.filePath}`;
+
 const emitRoomJoin = (logger: LineHeatLogger, room: RoomContext) => {
 	if (!activeSocket?.connected || !protocolModule) {
 		return;
@@ -326,7 +334,7 @@ const disconnectSocket = () => {
 	activeSocket.removeAllListeners();
 	activeSocket.disconnect();
 	activeSocket = undefined;
-	joinedRoomContext = undefined;
+	joinedRooms.clear();
 	activePresence = undefined;
 	retentionDays = getDefaultRetentionDays();
 };
@@ -356,6 +364,7 @@ const connectSocket = (
 		logger.info('connected');
 		missingConfigLogged = false;
 		updateStatusBar();
+		void updateOpenRoomsFromTabs(logger);
 		void updateActiveEditorState(logger, vscode.window.activeTextEditor);
 	});
 
@@ -384,7 +393,7 @@ const connectSocket = (
 	socket.on('disconnect', (reason) => {
 		logger.warn(`disconnected: ${reason}`);
 		retentionDays = getDefaultRetentionDays();
-		joinedRoomContext = undefined;
+		joinedRooms.clear();
 		activePresence = undefined;
 		updateStatusBar();
 	});
@@ -670,13 +679,13 @@ const refreshActiveRepoState = async (
 ) => {
 	if (!editor) {
 		activeRepoState = { status: 'unknown' };
-		desiredRoomContext = undefined;
+		activeRoomContext = undefined;
 		updateStatusBar();
 		return undefined;
 	}
 	if (editor.document.uri.scheme !== 'file') {
 		activeRepoState = { status: 'unknown' };
-		desiredRoomContext = undefined;
+		activeRoomContext = undefined;
 		updateStatusBar();
 		return undefined;
 	}
@@ -684,44 +693,82 @@ const refreshActiveRepoState = async (
 	const context = await resolveRepoContext(filePath, logger);
 	if (!context) {
 		activeRepoState = { status: 'nogit' };
-		desiredRoomContext = undefined;
+		activeRoomContext = undefined;
 		updateStatusBar();
 		logNoGitOnce(logger);
 		return undefined;
 	}
 	activeRepoState = { status: 'ready', context };
-	desiredRoomContext = { repoId: context.repoId, filePath: context.filePath };
+	activeRoomContext = { repoId: context.repoId, filePath: context.filePath };
 	logger.debug(`active repo ${JSON.stringify({ repoId: context.repoId, filePath: context.filePath })}`);
 	updateStatusBar();
 	return context;
 };
 
-const syncRoomWithSocket = (logger: LineHeatLogger) => {
+const applyRoomLimit = (orderedRooms: RoomKey[], activeRoomKey: RoomKey | undefined) => {
+	const limitedRooms = [...orderedRooms];
+	const evictedRooms: RoomKey[] = [];
+	while (limitedRooms.length > maxSubscribedRooms) {
+		let index = limitedRooms.length - 1;
+		while (index >= 0 && limitedRooms[index] === activeRoomKey) {
+			index -= 1;
+		}
+		if (index < 0) {
+			break;
+		}
+		const [evicted] = limitedRooms.splice(index, 1);
+		if (evicted) {
+			evictedRooms.push(evicted);
+		}
+	}
+	return { limitedRooms, evictedRooms };
+};
+
+const syncRoomsWithSocket = (logger: LineHeatLogger) => {
 	if (!activeSocket?.connected || !protocolModule) {
 		return;
 	}
-	if (joinedRoomContext && !isSameRoom(joinedRoomContext, desiredRoomContext)) {
-		emitRoomLeave(logger, joinedRoomContext);
-		joinedRoomContext = undefined;
+	const activeRoomKey = activeRoomContext ? getRoomKey(activeRoomContext) : undefined;
+	const orderedRooms = mruRooms.filter((roomKey) => desiredRooms.has(roomKey));
+	const { limitedRooms, evictedRooms } = applyRoomLimit(orderedRooms, activeRoomKey);
+	const targetRooms = new Set(limitedRooms);
+	const evictedSet = new Set(evictedRooms);
+	for (const [roomKey, room] of Array.from(joinedRooms.entries())) {
+		if (!targetRooms.has(roomKey)) {
+			if (evictedSet.has(roomKey)) {
+				logger.debug(`lineheat: room:evict repoId=${room.repoId} filePath=${room.filePath}`);
+			}
+			emitRoomLeave(logger, room);
+			joinedRooms.delete(roomKey);
+		}
 	}
-	if (desiredRoomContext && !isSameRoom(joinedRoomContext, desiredRoomContext)) {
-		emitRoomJoin(logger, desiredRoomContext);
-		joinedRoomContext = desiredRoomContext;
+	for (const roomKey of limitedRooms) {
+		if (joinedRooms.has(roomKey)) {
+			continue;
+		}
+		const room = desiredRooms.get(roomKey);
+		if (!room) {
+			continue;
+		}
+		emitRoomJoin(logger, room);
+		joinedRooms.set(roomKey, room);
 	}
 };
 
 const syncPresenceWithSocket = (logger: LineHeatLogger) => {
-	if (!activeSocket?.connected || !protocolModule || !joinedRoomContext) {
+	if (!activeSocket?.connected || !protocolModule) {
 		return;
 	}
-	if (activePresence && !isSamePresence(activePresence, desiredPresence)) {
+	const activeRoomKey = activeRoomContext ? getRoomKey(activeRoomContext) : undefined;
+	const isActiveRoomJoined = activeRoomKey ? joinedRooms.has(activeRoomKey) : false;
+	if (activePresence && (!desiredPresence || !isSamePresence(activePresence, desiredPresence))) {
 		emitPresenceClear(logger, {
 			repoId: activePresence.repoId,
 			filePath: activePresence.filePath,
 		});
 		activePresence = undefined;
 	}
-	if (desiredPresence && !isSamePresence(activePresence, desiredPresence)) {
+	if (desiredPresence && isActiveRoomJoined && !isSamePresence(activePresence, desiredPresence)) {
 		emitPresenceSet(logger, desiredPresence);
 		activePresence = desiredPresence;
 	}
@@ -732,7 +779,7 @@ const updateDesiredPresenceFromEditor = async (editor: vscode.TextEditor | undef
 		desiredPresence = undefined;
 		return;
 	}
-	if (!desiredRoomContext) {
+	if (!activeRoomContext) {
 		desiredPresence = undefined;
 		return;
 	}
@@ -743,24 +790,86 @@ const updateDesiredPresenceFromEditor = async (editor: vscode.TextEditor | undef
 		return;
 	}
 	desiredPresence = {
-		repoId: desiredRoomContext.repoId,
-		filePath: desiredRoomContext.filePath,
+		repoId: activeRoomContext.repoId,
+		filePath: activeRoomContext.filePath,
 		functionId: functionInfo.functionId,
 		anchorLine: functionInfo.anchorLine,
 	};
+};
+
+const updateOpenRoomsFromTabs = async (logger: LineHeatLogger) => {
+	try {
+		const tabs = vscode.window.tabGroups.all.flatMap((group) => group.tabs);
+		const roomResults = await Promise.all(
+			tabs.map(async (tab) => {
+				if (!(tab.input instanceof vscode.TabInputText)) {
+					return undefined;
+				}
+				const uri = tab.input.uri;
+				if (uri.scheme !== 'file') {
+					return undefined;
+				}
+				const context = await resolveRepoContext(uri.fsPath, logger);
+				if (!context) {
+					return undefined;
+				}
+				return { repoId: context.repoId, filePath: context.filePath } as RoomContext;
+			}),
+		);
+		const nextDesiredRooms = new Map<RoomKey, RoomContext>();
+		const nextCounts = new Map<RoomKey, number>();
+		const orderedRooms: RoomKey[] = [];
+		const seen = new Set<RoomKey>();
+		for (const room of roomResults) {
+			if (!room) {
+				continue;
+			}
+			const roomKey = getRoomKey(room);
+			nextDesiredRooms.set(roomKey, room);
+			nextCounts.set(roomKey, (nextCounts.get(roomKey) ?? 0) + 1);
+			if (!seen.has(roomKey)) {
+				seen.add(roomKey);
+				orderedRooms.push(roomKey);
+			}
+		}
+		desiredRooms = nextDesiredRooms;
+		openRoomCounts = nextCounts;
+		if (mruRooms.length === 0) {
+			mruRooms = orderedRooms;
+		} else {
+			mruRooms = mruRooms.filter((roomKey) => desiredRooms.has(roomKey));
+			for (const roomKey of orderedRooms) {
+				if (!mruRooms.includes(roomKey)) {
+					mruRooms.push(roomKey);
+				}
+			}
+		}
+		const activeRoomKey = activeRoomContext ? getRoomKey(activeRoomContext) : undefined;
+		if (activeRoomKey && desiredRooms.has(activeRoomKey)) {
+			mruRooms = [activeRoomKey, ...mruRooms.filter((roomKey) => roomKey !== activeRoomKey)];
+		}
+		syncRoomsWithSocket(logger);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'unknown error';
+		logger.debug(`tab room refresh failed: ${message}`);
+	}
 };
 
 const updateActiveEditorState = async (
 	logger: LineHeatLogger,
 	editor: vscode.TextEditor | undefined,
 ) => {
-	const previousRoom = desiredRoomContext;
+	const previousRoom = activeRoomContext;
 	await refreshActiveRepoState(logger, editor);
-	if (!isSameRoom(previousRoom, desiredRoomContext)) {
+	if (!isSameRoom(previousRoom, activeRoomContext)) {
 		desiredPresence = undefined;
 	}
 	syncPresenceWithSocket(logger);
-	syncRoomWithSocket(logger);
+	const activeRoomKey = activeRoomContext ? getRoomKey(activeRoomContext) : undefined;
+	if (activeRoomKey && desiredRooms.has(activeRoomKey)) {
+		mruRooms = [activeRoomKey, ...mruRooms.filter((roomKey) => roomKey !== activeRoomKey)];
+	}
+	syncRoomsWithSocket(logger);
 	await updateDesiredPresenceFromEditor(editor);
 	syncPresenceWithSocket(logger);
 };
@@ -812,15 +921,8 @@ export function activate(context: vscode.ExtensionContext) {
 					}
 				}
 			}
-			if (
-				context &&
-				activeSocket?.connected &&
-				protocolModule &&
-				desiredRoomContext &&
-				joinedRoomContext &&
-				isSameRoom(desiredRoomContext, { repoId: context.repoId, filePath: context.filePath }) &&
-				isSameRoom(joinedRoomContext, { repoId: context.repoId, filePath: context.filePath })
-			) {
+			const roomKey = context ? getRoomKey({ repoId: context.repoId, filePath: context.filePath }) : undefined;
+			if (context && activeSocket?.connected && protocolModule && roomKey && joinedRooms.has(roomKey)) {
 				for (const functionInfo of functionUpdates.values()) {
 					activeSocket.emit(protocolModule.EVENT_EDIT_PUSH, {
 						repoId: context.repoId,
@@ -853,6 +955,10 @@ export function activate(context: vscode.ExtensionContext) {
 		void updateActiveEditorState(logger, editor);
 	});
 
+	const onTabDisposable = vscode.window.tabGroups.onDidChangeTabs(() => {
+		void updateOpenRoomsFromTabs(logger);
+	});
+
 	const onSelectionDisposable = vscode.window.onDidChangeTextEditorSelection((event) => {
 		if (event.textEditor.document.uri.scheme !== 'file') {
 			return;
@@ -872,6 +978,7 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 	updateStatusBar();
 	void updateActiveEditorState(logger, vscode.window.activeTextEditor);
+	void updateOpenRoomsFromTabs(logger);
 	ensurePresenceKeepalive(logger);
 
 	context.subscriptions.push(
@@ -880,6 +987,7 @@ export function activate(context: vscode.ExtensionContext) {
 		onEditDisposable,
 		onConfigDisposable,
 		onEditorDisposable,
+		onTabDisposable,
 		onSelectionDisposable,
 	);
 	return { logger: { lines: logger.lines } };
@@ -889,11 +997,14 @@ export function getLoggerForTests(): { lines: string[] } | undefined {
 	return activeLogger ? { lines: activeLogger.lines } : undefined;
 }
 
-export function deactivate() {
+	export function deactivate() {
 	disconnectSocket();
 	activeLogger = undefined;
-	desiredRoomContext = undefined;
-	joinedRoomContext = undefined;
+	activeRoomContext = undefined;
+	desiredRooms.clear();
+	joinedRooms.clear();
+	openRoomCounts.clear();
+	mruRooms = [];
 	desiredPresence = undefined;
 	activePresence = undefined;
 	if (presenceKeepaliveTimer) {
