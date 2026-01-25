@@ -14,6 +14,11 @@ type LogLevel = 'error' | 'warn' | 'info' | 'debug';
 type ProtocolModule = {
 	DEFAULT_RETENTION_DAYS: number;
 	PROTOCOL_VERSION: string;
+	EVENT_ROOM_JOIN: string;
+	EVENT_ROOM_LEAVE: string;
+	EVENT_EDIT_PUSH: string;
+	EVENT_PRESENCE_SET: string;
+	EVENT_PRESENCE_CLEAR: string;
 	EVENT_SERVER_HELLO: string;
 	EVENT_SERVER_INCOMPATIBLE: string;
 };
@@ -44,12 +49,24 @@ type RepoContext = {
 	filePath: string;
 };
 
+type RoomContext = {
+	repoId: string;
+	filePath: string;
+};
+
 type RepoState = {
 	status: 'unknown' | 'nogit' | 'ready';
 	context?: RepoContext;
 };
 
 type FunctionInfo = {
+	functionId: string;
+	anchorLine: number;
+};
+
+type PresenceState = {
+	repoId: string;
+	filePath: string;
 	functionId: string;
 	anchorLine: number;
 };
@@ -73,6 +90,12 @@ let missingConfigLogged = false;
 let protocolModule: ProtocolModule | undefined;
 let activeRepoState: RepoState = { status: 'unknown' };
 let noGitLogged = false;
+
+let desiredRoomContext: RoomContext | undefined;
+let joinedRoomContext: RoomContext | undefined;
+let desiredPresence: PresenceState | undefined;
+let activePresence: PresenceState | undefined;
+let presenceKeepaliveTimer: NodeJS.Timeout | undefined;
 
 const gitRootCache = new Map<string, Promise<string | undefined>>();
 const repoIdCache = new Map<string, Promise<string | undefined>>();
@@ -208,6 +231,47 @@ const resolveFunctionInfoFromSymbols = (
 	return { functionId: best.functionId, anchorLine: best.anchorLine };
 };
 
+const isSameRoom = (left: RoomContext | undefined, right: RoomContext | undefined) =>
+	left?.repoId === right?.repoId && left?.filePath === right?.filePath;
+
+const isSamePresence = (left: PresenceState | undefined, right: PresenceState | undefined) =>
+	left?.repoId === right?.repoId &&
+	left?.filePath === right?.filePath &&
+	left?.functionId === right?.functionId &&
+	left?.anchorLine === right?.anchorLine;
+
+const emitRoomJoin = (logger: LineHeatLogger, room: RoomContext) => {
+	if (!activeSocket?.connected || !protocolModule) {
+		return;
+	}
+	activeSocket.emit(protocolModule.EVENT_ROOM_JOIN, room);
+	logger.debug(`lineheat: room:join repoId=${room.repoId} filePath=${room.filePath}`);
+};
+
+const emitRoomLeave = (logger: LineHeatLogger, room: RoomContext) => {
+	if (!activeSocket?.connected || !protocolModule) {
+		return;
+	}
+	activeSocket.emit(protocolModule.EVENT_ROOM_LEAVE, room);
+	logger.debug(`lineheat: room:leave repoId=${room.repoId} filePath=${room.filePath}`);
+};
+
+const emitPresenceSet = (logger: LineHeatLogger, payload: PresenceState) => {
+	if (!activeSocket?.connected || !protocolModule) {
+		return;
+	}
+	activeSocket.emit(protocolModule.EVENT_PRESENCE_SET, payload);
+	logger.debug('lineheat: presence:set');
+};
+
+const emitPresenceClear = (logger: LineHeatLogger, payload: RoomContext) => {
+	if (!activeSocket?.connected || !protocolModule) {
+		return;
+	}
+	activeSocket.emit(protocolModule.EVENT_PRESENCE_CLEAR, payload);
+	logger.debug('lineheat: presence:clear');
+};
+
 const readSettings = (): LineHeatSettings => {
 	const config = vscode.workspace.getConfiguration('lineheat');
 	const displayNameSetting = normalizeString(config.get<string>('displayName'));
@@ -262,6 +326,8 @@ const disconnectSocket = () => {
 	activeSocket.removeAllListeners();
 	activeSocket.disconnect();
 	activeSocket = undefined;
+	joinedRoomContext = undefined;
+	activePresence = undefined;
 	retentionDays = getDefaultRetentionDays();
 };
 
@@ -290,6 +356,7 @@ const connectSocket = (
 		logger.info('connected');
 		missingConfigLogged = false;
 		updateStatusBar();
+		void updateActiveEditorState(logger, vscode.window.activeTextEditor);
 	});
 
 	socket.on('connect_error', (error) => {
@@ -317,6 +384,8 @@ const connectSocket = (
 	socket.on('disconnect', (reason) => {
 		logger.warn(`disconnected: ${reason}`);
 		retentionDays = getDefaultRetentionDays();
+		joinedRoomContext = undefined;
+		activePresence = undefined;
 		updateStatusBar();
 	});
 
@@ -601,25 +670,111 @@ const refreshActiveRepoState = async (
 ) => {
 	if (!editor) {
 		activeRepoState = { status: 'unknown' };
+		desiredRoomContext = undefined;
 		updateStatusBar();
-		return;
+		return undefined;
 	}
 	if (editor.document.uri.scheme !== 'file') {
 		activeRepoState = { status: 'unknown' };
+		desiredRoomContext = undefined;
 		updateStatusBar();
-		return;
+		return undefined;
 	}
 	const filePath = editor.document.uri.fsPath;
 	const context = await resolveRepoContext(filePath, logger);
 	if (!context) {
 		activeRepoState = { status: 'nogit' };
+		desiredRoomContext = undefined;
 		updateStatusBar();
 		logNoGitOnce(logger);
-		return;
+		return undefined;
 	}
 	activeRepoState = { status: 'ready', context };
+	desiredRoomContext = { repoId: context.repoId, filePath: context.filePath };
 	logger.debug(`active repo ${JSON.stringify({ repoId: context.repoId, filePath: context.filePath })}`);
 	updateStatusBar();
+	return context;
+};
+
+const syncRoomWithSocket = (logger: LineHeatLogger) => {
+	if (!activeSocket?.connected || !protocolModule) {
+		return;
+	}
+	if (joinedRoomContext && !isSameRoom(joinedRoomContext, desiredRoomContext)) {
+		emitRoomLeave(logger, joinedRoomContext);
+		joinedRoomContext = undefined;
+	}
+	if (desiredRoomContext && !isSameRoom(joinedRoomContext, desiredRoomContext)) {
+		emitRoomJoin(logger, desiredRoomContext);
+		joinedRoomContext = desiredRoomContext;
+	}
+};
+
+const syncPresenceWithSocket = (logger: LineHeatLogger) => {
+	if (!activeSocket?.connected || !protocolModule || !joinedRoomContext) {
+		return;
+	}
+	if (activePresence && !isSamePresence(activePresence, desiredPresence)) {
+		emitPresenceClear(logger, {
+			repoId: activePresence.repoId,
+			filePath: activePresence.filePath,
+		});
+		activePresence = undefined;
+	}
+	if (desiredPresence && !isSamePresence(activePresence, desiredPresence)) {
+		emitPresenceSet(logger, desiredPresence);
+		activePresence = desiredPresence;
+	}
+};
+
+const updateDesiredPresenceFromEditor = async (editor: vscode.TextEditor | undefined) => {
+	if (!editor || editor.document.uri.scheme !== 'file') {
+		desiredPresence = undefined;
+		return;
+	}
+	if (!desiredRoomContext) {
+		desiredPresence = undefined;
+		return;
+	}
+	const symbols = await getDocumentSymbols(editor.document);
+	const functionInfo = resolveFunctionInfoFromSymbols(symbols, editor.selection.active);
+	if (!functionInfo) {
+		desiredPresence = undefined;
+		return;
+	}
+	desiredPresence = {
+		repoId: desiredRoomContext.repoId,
+		filePath: desiredRoomContext.filePath,
+		functionId: functionInfo.functionId,
+		anchorLine: functionInfo.anchorLine,
+	};
+};
+
+const updateActiveEditorState = async (
+	logger: LineHeatLogger,
+	editor: vscode.TextEditor | undefined,
+) => {
+	const previousRoom = desiredRoomContext;
+	await refreshActiveRepoState(logger, editor);
+	if (!isSameRoom(previousRoom, desiredRoomContext)) {
+		desiredPresence = undefined;
+	}
+	syncPresenceWithSocket(logger);
+	syncRoomWithSocket(logger);
+	await updateDesiredPresenceFromEditor(editor);
+	syncPresenceWithSocket(logger);
+};
+
+const ensurePresenceKeepalive = (logger: LineHeatLogger) => {
+	if (presenceKeepaliveTimer) {
+		return;
+	}
+	presenceKeepaliveTimer = setInterval(() => {
+		if (!activePresence || !activeSocket?.connected || !protocolModule) {
+			return;
+		}
+		emitPresenceSet(logger, activePresence);
+	}, 5000);
 };
 
 export function activate(context: vscode.ExtensionContext) {
@@ -643,18 +798,37 @@ export function activate(context: vscode.ExtensionContext) {
 			const context = await resolveRepoContext(event.document.uri.fsPath, logger);
 			if (!context) {
 				logNoGitOnce(logger);
-				return;
 			}
 			const symbols = await getDocumentSymbols(event.document);
 			const changesByLine = new Map<number, FunctionInfo | null>();
+			const functionUpdates = new Map<string, FunctionInfo>();
 			for (const change of event.contentChanges) {
 				const line = change.range.start.line + 1;
 				if (!changesByLine.has(line)) {
 					const functionInfo = resolveFunctionInfoFromSymbols(symbols, change.range.start);
 					changesByLine.set(line, functionInfo);
-					logger.debug(
-						`lineheat: edit functionId=${functionInfo?.functionId ?? 'null'}`,
-					);
+					if (functionInfo && !functionUpdates.has(functionInfo.functionId)) {
+						functionUpdates.set(functionInfo.functionId, functionInfo);
+					}
+				}
+			}
+			if (
+				context &&
+				activeSocket?.connected &&
+				protocolModule &&
+				desiredRoomContext &&
+				joinedRoomContext &&
+				isSameRoom(desiredRoomContext, { repoId: context.repoId, filePath: context.filePath }) &&
+				isSameRoom(joinedRoomContext, { repoId: context.repoId, filePath: context.filePath })
+			) {
+				for (const functionInfo of functionUpdates.values()) {
+					activeSocket.emit(protocolModule.EVENT_EDIT_PUSH, {
+						repoId: context.repoId,
+						filePath: context.filePath,
+						functionId: functionInfo.functionId,
+						anchorLine: functionInfo.anchorLine,
+					});
+					logger.debug(`lineheat: edit:push functionId=${functionInfo.functionId}`);
 				}
 			}
 			for (const [line, functionInfo] of changesByLine.entries()) {
@@ -676,27 +850,19 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 
 	const onEditorDisposable = vscode.window.onDidChangeActiveTextEditor((editor) => {
-		void refreshActiveRepoState(logger, editor);
+		void updateActiveEditorState(logger, editor);
 	});
 
 	const onSelectionDisposable = vscode.window.onDidChangeTextEditorSelection((event) => {
 		if (event.textEditor.document.uri.scheme !== 'file') {
 			return;
 		}
+		if (event.textEditor !== vscode.window.activeTextEditor) {
+			return;
+		}
 		void (async () => {
-			const context = await resolveRepoContext(event.textEditor.document.uri.fsPath, logger);
-			if (!context) {
-				logNoGitOnce(logger);
-				return;
-			}
-			const symbols = await getDocumentSymbols(event.textEditor.document);
-			const functionInfo = resolveFunctionInfoFromSymbols(
-				symbols,
-				event.textEditor.selection.active,
-			);
-			logger.debug(
-				`lineheat: presence functionId=${functionInfo?.functionId ?? 'null'}`,
-			);
+			await updateDesiredPresenceFromEditor(event.textEditor);
+			syncPresenceWithSocket(logger);
 		})();
 	});
 
@@ -705,7 +871,8 @@ export function activate(context: vscode.ExtensionContext) {
 		refreshConnection(logger);
 	});
 	updateStatusBar();
-	void refreshActiveRepoState(logger, vscode.window.activeTextEditor);
+	void updateActiveEditorState(logger, vscode.window.activeTextEditor);
+	ensurePresenceKeepalive(logger);
 
 	context.subscriptions.push(
 		logger.output,
@@ -725,4 +892,12 @@ export function getLoggerForTests(): { lines: string[] } | undefined {
 export function deactivate() {
 	disconnectSocket();
 	activeLogger = undefined;
+	desiredRoomContext = undefined;
+	joinedRoomContext = undefined;
+	desiredPresence = undefined;
+	activePresence = undefined;
+	if (presenceKeepaliveTimer) {
+		clearInterval(presenceKeepaliveTimer);
+		presenceKeepaliveTimer = undefined;
+	}
 }
