@@ -1,9 +1,9 @@
-import { createServer } from "node:http";
 import { DEFAULT_RETENTION_DAYS, PROTOCOL_VERSION } from "@line-heat/protocol";
 
 import { SqliteEventStore } from "./adapters/sqliteEventStore.js";
 import { replayHeatState } from "./application/heatReplay.js";
 import { pruneHeatState } from "./domain/heatState.js";
+import { createLineHeatServer } from "./server.js";
 
 const token = process.env.LINEHEAT_TOKEN?.trim() ?? "";
 
@@ -41,18 +41,14 @@ const retentionInterval = setInterval(() => {
   pruneHeatState(heatState, cutoffTs);
 }, retentionIntervalMs);
 
-const server = createServer((_, response) => {
-  response.writeHead(200, { "content-type": "application/json" });
-  response.end(
-    JSON.stringify({
-      status: "ok",
-      protocolVersion: PROTOCOL_VERSION,
-      retentionDays,
-    })
-  );
+const lineHeatServer = createLineHeatServer({
+  token,
+  retentionDays,
+  eventStore,
+  heatState,
 });
 
-server.listen(port, "0.0.0.0", () => {
+lineHeatServer.httpServer.listen(port, "0.0.0.0", () => {
   console.log(
     `lineheat server listening on 0.0.0.0:${port} (protocol ${PROTOCOL_VERSION})`
   );
@@ -60,7 +56,7 @@ server.listen(port, "0.0.0.0", () => {
 
 const shutdown = (signal: string) => {
   console.log(`lineheat server shutting down (${signal})`);
-  server.close(() => {
+  lineHeatServer.close().then(() => {
     clearInterval(retentionInterval);
     eventStore.close();
     process.exit(0);
