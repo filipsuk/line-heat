@@ -1,1 +1,1 @@
-export {};
+export { SqliteEventStore } from "./sqliteEventStore.js";
