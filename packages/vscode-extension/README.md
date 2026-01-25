@@ -36,10 +36,12 @@ To package a `.vsix` (optional):
 
 ```bash
 cd packages/vscode-extension
-npm exec --yes @vscode/vsce package
+npm exec --yes @vscode/vsce package -- --no-dependencies
 ```
 
 Then install it in VS Code via "Extensions: Install from VSIX...".
+
+Note: The extension bundles its runtime dependencies into `out/extension.js`, so the VSIX stays small and doesn't pull in the whole workspace.
 
 ## Configuration
 
