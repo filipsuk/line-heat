@@ -9,7 +9,7 @@
     "url": "https://github.com/filipsuk/line-heat.git"
   },
   "engines": {
-    "vscode": "^1.108.1"
+    "vscode": "^1.105.1"
   },
   "categories": [
     "Other"
@@ -75,7 +75,7 @@
   "dependencies": {},
   "devDependencies": {
     "@line-heat/protocol": "0.0.0",
-    "@types/vscode": "^1.108.1",
+    "@types/vscode": "^1.105.1",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
     "esbuild": "^0.25.10",

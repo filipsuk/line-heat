@@ -14,6 +14,7 @@ export LINEHEAT_TOKEN="devtoken"          # required (fail fast if missing/empty
 export PORT="8787"                        # optional
 export LINEHEAT_RETENTION_DAYS="7"         # optional
 export LINEHEAT_DB_PATH="/data/lineheat.sqlite" # optional
+export LOG_LEVEL="info"                    # optional (debug | info | warn | error)
 ```
 
 ## Handshake Auth Fields (Client -> Server)
