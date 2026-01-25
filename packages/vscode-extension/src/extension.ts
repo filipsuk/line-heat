@@ -49,6 +49,11 @@ type RepoState = {
 	context?: RepoContext;
 };
 
+type FunctionInfo = {
+	functionId: string;
+	anchorLine: number;
+};
+
 const USER_ID_KEY = 'lineheat.userId';
 
 const logLevelWeight: Record<LogLevel, number> = {
@@ -72,6 +77,21 @@ let noGitLogged = false;
 const gitRootCache = new Map<string, Promise<string | undefined>>();
 const repoIdCache = new Map<string, Promise<string | undefined>>();
 const fileRepoCache = new Map<string, Promise<RepoContext | undefined>>();
+
+const documentSymbolCache = new Map<string, { version: number; symbols: vscode.DocumentSymbol[] }>();
+
+const functionSymbolKinds = new Set<vscode.SymbolKind>([
+	vscode.SymbolKind.Function,
+	vscode.SymbolKind.Method,
+	vscode.SymbolKind.Constructor,
+]);
+
+const containerSymbolKinds = new Set<vscode.SymbolKind>([
+	vscode.SymbolKind.Class,
+	vscode.SymbolKind.Namespace,
+	vscode.SymbolKind.Module,
+	vscode.SymbolKind.Function,
+]);
 
 const gitTimeoutMs = 1500;
 
@@ -104,6 +124,89 @@ const createLogger = (level: LogLevel): LineHeatLogger => {
 };
 
 const normalizeString = (value: string | undefined) => value?.trim() ?? '';
+
+const encodeSymbolName = (name: string) => encodeURIComponent(name.trim());
+
+const isDocumentSymbol = (
+	symbol: vscode.DocumentSymbol | vscode.SymbolInformation,
+): symbol is vscode.DocumentSymbol => 'selectionRange' in symbol;
+
+const getDocumentSymbols = async (document: vscode.TextDocument) => {
+	const cacheKey = document.uri.toString();
+	const cached = documentSymbolCache.get(cacheKey);
+	if (cached && cached.version === document.version) {
+		return cached.symbols;
+	}
+	try {
+		const results = await vscode.commands.executeCommand<
+			(vscode.DocumentSymbol | vscode.SymbolInformation)[]
+		>('vscode.executeDocumentSymbolProvider', document.uri);
+		const symbols = (results ?? []).filter(isDocumentSymbol);
+		documentSymbolCache.set(cacheKey, { version: document.version, symbols });
+		return symbols;
+	} catch {
+		documentSymbolCache.set(cacheKey, { version: document.version, symbols: [] });
+		return [];
+	}
+};
+
+const resolveFunctionInfoFromSymbols = (
+	symbols: vscode.DocumentSymbol[],
+	position: vscode.Position,
+): FunctionInfo | null => {
+	let best:
+		| {
+			functionId: string;
+			anchorLine: number;
+			length: number;
+			depth: number;
+			order: number;
+		}
+		| undefined;
+	let order = 0;
+	const visit = (symbol: vscode.DocumentSymbol, ancestors: vscode.DocumentSymbol[]) => {
+		const currentOrder = order;
+		order += 1;
+		const nextAncestors = [...ancestors, symbol];
+		if (functionSymbolKinds.has(symbol.kind) && symbol.range.contains(position)) {
+			const length = symbol.range.end.line - symbol.range.start.line;
+			const depth = ancestors.length;
+			const containerSegments = ancestors
+				.filter((ancestor) => containerSymbolKinds.has(ancestor.kind))
+				.map((ancestor) => encodeSymbolName(ancestor.name));
+			const functionName = encodeSymbolName(symbol.name);
+			const functionId =
+				containerSegments.length > 0
+					? `${containerSegments.join('/')}/${functionName}`
+					: functionName;
+			const anchorLine = symbol.selectionRange.start.line + 1;
+			const candidate = { functionId, anchorLine, length, depth, order: currentOrder };
+			if (!best) {
+				best = candidate;
+			} else if (candidate.length < best.length) {
+				best = candidate;
+			} else if (candidate.length === best.length && candidate.depth > best.depth) {
+				best = candidate;
+			} else if (
+				candidate.length === best.length &&
+				candidate.depth === best.depth &&
+				candidate.order < best.order
+			) {
+				best = candidate;
+			}
+		}
+		for (const child of symbol.children) {
+			visit(child, nextAncestors);
+		}
+	};
+	for (const symbol of symbols) {
+		visit(symbol, []);
+	}
+	if (!best) {
+		return null;
+	}
+	return { functionId: best.functionId, anchorLine: best.anchorLine };
+};
 
 const readSettings = (): LineHeatSettings => {
 	const config = vscode.workspace.getConfiguration('lineheat');
@@ -536,20 +639,33 @@ export function activate(context: vscode.ExtensionContext) {
 			return;
 		}
 
-		void resolveRepoContext(event.document.uri.fsPath, logger).then((context) => {
+		void (async () => {
+			const context = await resolveRepoContext(event.document.uri.fsPath, logger);
 			if (!context) {
 				logNoGitOnce(logger);
 				return;
 			}
-			const changedLines = new Set<number>();
+			const symbols = await getDocumentSymbols(event.document);
+			const changesByLine = new Map<number, FunctionInfo | null>();
 			for (const change of event.contentChanges) {
-				changedLines.add(change.range.start.line + 1);
+				const line = change.range.start.line + 1;
+				if (!changesByLine.has(line)) {
+					const functionInfo = resolveFunctionInfoFromSymbols(symbols, change.range.start);
+					changesByLine.set(line, functionInfo);
+					logger.debug(
+						`lineheat: edit functionId=${functionInfo?.functionId ?? 'null'}`,
+					);
+				}
 			}
-
-			for (const line of changedLines) {
-				logger.logEdit(`${event.document.uri.fsPath}:${line}`);
+			for (const [line, functionInfo] of changesByLine.entries()) {
+				const entry = functionInfo
+					? `${event.document.uri.fsPath}:${line} functionId=${functionInfo.functionId} anchorLine=${
+							functionInfo.anchorLine
+						}`
+					: `${event.document.uri.fsPath}:${line}`;
+				logger.logEdit(entry);
 			}
-		});
+		})();
 	});
 
 	const onConfigDisposable = vscode.workspace.onDidChangeConfiguration((event) => {
@@ -561,6 +677,27 @@ export function activate(context: vscode.ExtensionContext) {
 
 	const onEditorDisposable = vscode.window.onDidChangeActiveTextEditor((editor) => {
 		void refreshActiveRepoState(logger, editor);
+	});
+
+	const onSelectionDisposable = vscode.window.onDidChangeTextEditorSelection((event) => {
+		if (event.textEditor.document.uri.scheme !== 'file') {
+			return;
+		}
+		void (async () => {
+			const context = await resolveRepoContext(event.textEditor.document.uri.fsPath, logger);
+			if (!context) {
+				logNoGitOnce(logger);
+				return;
+			}
+			const symbols = await getDocumentSymbols(event.textEditor.document);
+			const functionInfo = resolveFunctionInfoFromSymbols(
+				symbols,
+				event.textEditor.selection.active,
+			);
+			logger.debug(
+				`lineheat: presence functionId=${functionInfo?.functionId ?? 'null'}`,
+			);
+		})();
 	});
 
 	void ensureUserId(context).then(async () => {
@@ -576,6 +713,7 @@ export function activate(context: vscode.ExtensionContext) {
 		onEditDisposable,
 		onConfigDisposable,
 		onEditorDisposable,
+		onSelectionDisposable,
 	);
 	return { logger: { lines: logger.lines } };
 }

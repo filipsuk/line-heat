@@ -99,4 +99,62 @@ suite('Line Heat Extension', function () {
 			await fs.rm(tempDir, { recursive: true, force: true });
 		}
 	});
+
+	test('logs function identifiers for edits', async () => {
+		const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+		assert.ok(extension, 'Extension not found');
+
+		const api = await extension?.activate();
+		assert.ok(api?.logger, 'Extension did not return logger');
+
+		api?.logger.lines.splice(0, api.logger.lines.length);
+
+		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'line-heat-symbols-'));
+		try {
+			await runGit(['init'], tempDir);
+			await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
+
+			const filePath = path.join(tempDir, 'symbols.ts');
+			const fileUri = vscode.Uri.file(filePath);
+			await fs.writeFile(
+				filePath,
+				[
+					'namespace Alpha {',
+					'  export class Box {',
+					'    constructor() {',
+					'      const value = 1;',
+					'    }',
+					'',
+					'    methodOne() {',
+					'      const value = 2;',
+					'      return value;',
+					'    }',
+					'  }',
+					'',
+					'  export function outer() {',
+					'    function inner() {',
+					'      return 3;',
+					'    }',
+					'    return inner();',
+					'  }',
+					'}',
+				].join('\n'),
+				'utf8',
+			);
+
+			const doc = await vscode.workspace.openTextDocument(fileUri);
+			const editor = await vscode.window.showTextDocument(doc, { preview: false });
+
+			const expectedMethod = `${fileUri.fsPath}:8 functionId=Alpha/Box/methodOne anchorLine=7`;
+			await editAndWaitForLog(api, editor, new vscode.Position(7, 0), 'edit ', expectedMethod);
+
+			const expectedInner = `${fileUri.fsPath}:15 functionId=Alpha/outer/inner anchorLine=14`;
+			await editAndWaitForLog(api, editor, new vscode.Position(14, 0), 'edit ', expectedInner);
+
+			assert.ok(api?.logger.lines.includes(expectedMethod), `Missing log entry: ${expectedMethod}`);
+			assert.ok(api?.logger.lines.includes(expectedInner), `Missing log entry: ${expectedInner}`);
+		} finally {
+			await fs.rm(tempDir, { recursive: true, force: true });
+		}
+	});
 });
