@@ -2,6 +2,45 @@
 
 LineHeat overlays a decaying heatmap on code based on recent teammate activity (MVP).
 
+## Try It In VS Code
+
+Prereqs:
+- Node.js + npm
+- VS Code
+
+From repo root:
+
+```bash
+npm install --no-package-lock
+```
+
+Start the server (optional but recommended for testing the realtime features):
+
+```bash
+export LINEHEAT_TOKEN=devtoken
+npm run dev -w @line-heat/server
+```
+
+Run the extension in an Extension Development Host:
+
+1) Open `packages/vscode-extension` in VS Code
+2) Run `npm run compile` (or use the default build task)
+3) Press `F5` to launch the Extension Development Host
+4) In the Extension Development Host settings, set:
+   - `lineheat.serverUrl = http://localhost:8787`
+   - `lineheat.token = devtoken`
+   - `lineheat.displayName = Your Name`
+   - `lineheat.emoji = 🙂`
+
+To package a `.vsix` (optional):
+
+```bash
+cd packages/vscode-extension
+npm exec --yes @vscode/vsce package
+```
+
+Then install it in VS Code via "Extensions: Install from VSIX...".
+
 ## Configuration
 
 Settings live under the `lineheat.*` namespace:
