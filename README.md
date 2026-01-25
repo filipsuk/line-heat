@@ -69,8 +69,10 @@ LineHeat is **not a surveillance tool**.
 
 - No global view of who is working or when
 - No source code, keystrokes, or file contents shared
+- Retention defaults to 7 days (configurable)
+- The extension shows the current retention (e.g. `LineHeat: 7d`)
+- Your identity (name + emoji) is only visible to teammates who also have the same file open
 - No tracking of time, productivity, or individuals
-- Only anonymous, short-lived activity signals on lines you already opened
 
 If you are not looking at a file, LineHeat shows you nothing about it.
 
@@ -100,6 +102,18 @@ LineHeat intentionally does **not**:
 APIs, behavior, and UI are expected to change.
 
 ---
+
+## Server (Docker)
+
+Copy/paste:
+
+```bash
+docker build -t lineheat-server -f packages/server/Dockerfile .
+
+docker run -e LINEHEAT_TOKEN=... -e LINEHEAT_RETENTION_DAYS=7 -e LINEHEAT_DB_PATH=/data/lineheat.sqlite -v $PWD/.lineheat:/data -p 8787:8787 lineheat-server
+
+docker exec -it <container> sqlite3 /data/lineheat.sqlite '.tables'
+```
 
 ## Planned Roadmap
 

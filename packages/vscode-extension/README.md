@@ -1,21 +1,24 @@
-# Line Heat
+# LineHeat (VS Code Extension)
 
-Line Heat logs the file path and line number every time you edit a line.
+LineHeat overlays a decaying heatmap on code based on recent teammate activity (MVP).
 
-## Usage
+## Configuration
 
-1. Start the extension in an Extension Development Host.
-2. Open the Output panel.
-3. Select `Line Heat` to see logs like:
+Settings live under the `lineheat.*` namespace:
 
-```
-/absolute/path/to/file.ts:12
-```
+- `lineheat.serverUrl` (required) - LineHeat server URL (e.g. `http://localhost:8787`)
+- `lineheat.token` (required) - shared team token (must match server `LINEHEAT_TOKEN`)
+- `lineheat.displayName` (optional) - shown to teammates (default: `${env:USER}`)
+- `lineheat.emoji` (optional) - shown next to your name (default: `U+1F642`)
+- `lineheat.heatDecayHours` (optional) - hours before heat fully decays (default: `24`)
+- `lineheat.logLevel` (optional) - `error|warn|info|debug` (default: `info`)
 
-## Notes
+When connected, the status bar shows the server retention (example: `LineHeat: 7d`).
 
-- Only changed line numbers are logged.
-- Logs are emitted once per line per edit event.
+## Logs / Debugging
+
+- Open the Output panel and select the `LineHeat` log channel.
+- Set `lineheat.logLevel` to `debug` for verbose protocol + room join/leave logs.
 
 ## Development Folders
 
