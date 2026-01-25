@@ -9,3 +9,6 @@ out/
 dist/
 .vscode-test/
 *.vsix
+
+# Local LineHeat data (sqlite, etc)
+.lineheat/
