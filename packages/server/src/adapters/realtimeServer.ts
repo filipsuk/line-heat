@@ -34,6 +34,7 @@ import type { HeatState } from "../domain/heatState.js";
 import { PresenceState } from "../domain/presenceState.js";
 import { compareSemver, parseSemver } from "../domain/semver.js";
 import type { SqliteEventStore } from "./sqliteEventStore.js";
+import { logger } from "./logger.js";
 
 type RealtimeServerOptions = {
   io: Server;
@@ -252,6 +253,11 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
         : "";
     const compatibilityError = checkCompatibility(clientProtocolVersion);
     if (compatibilityError) {
+      logger.warn("Connection rejected due to protocol incompatibility", {
+        userId: socketUser.userId,
+        displayName: socketUser.displayName,
+        reason: compatibilityError,
+      });
       const payload: ServerIncompatiblePayload = {
         serverProtocolVersion: PROTOCOL_VERSION,
         minClientProtocolVersion: MIN_CLIENT_PROTOCOL_VERSION,
@@ -261,6 +267,12 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
       setTimeout(() => socket.disconnect(true), 0);
       return;
     }
+
+    logger.info("Client connected", {
+      userId: socketUser.userId,
+      displayName: socketUser.displayName,
+      clientProtocolVersion,
+    });
 
     const helloPayload: ServerHelloPayload = {
       serverProtocolVersion: PROTOCOL_VERSION,
@@ -274,6 +286,11 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
       (payload: RoomJoinPayload, ack?: (response: RoomJoinAck) => void) => {
         const error = validateRoomPayload(payload);
         if (error) {
+          logger.debug("Room join rejected", {
+            userId: socketUser.userId,
+            displayName: socketUser.displayName,
+            error,
+          });
           if (typeof ack === "function") {
             ack({ ok: false, error });
           }
@@ -281,6 +298,11 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
         }
 
         const roomKey = getRoomKey(payload.repoId, payload.filePath);
+        logger.info("Client joined room", {
+          userId: socketUser.userId,
+          displayName: socketUser.displayName,
+          roomKey,
+        });
         socket.join(roomKey);
         const joinedRooms = socket.data.joinedRooms as Set<string> | undefined;
         joinedRooms?.add(roomKey);
@@ -308,6 +330,11 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
       if (!joinedRooms?.has(roomKey)) {
         return;
       }
+      logger.info("Client left room", {
+        userId: socketUser.userId,
+        displayName: socketUser.displayName,
+        roomKey,
+      });
       joinedRooms.delete(roomKey);
       socket.leave(roomKey);
       const presenceUpdate = presenceState.clearPresence(roomKey, socket.id);
@@ -327,6 +354,14 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
       if (!ensureJoined(socket, roomKey)) {
         return;
       }
+
+      logger.debug("Client pushed edit", {
+        userId: socketUser.userId,
+        displayName: socketUser.displayName,
+        roomKey,
+        functionId: payload.functionId,
+        anchorLine: payload.anchorLine,
+      });
 
       const now = Date.now();
       const event = {
@@ -361,6 +396,14 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
         return;
       }
 
+      logger.debug("Client set presence", {
+        userId: socketUser.userId,
+        displayName: socketUser.displayName,
+        roomKey,
+        functionId: payload.functionId,
+        anchorLine: payload.anchorLine,
+      });
+
       const update = presenceState.setPresence(roomKey, payload.repoId, payload.filePath, {
         socketId: socket.id,
         userId: socketUser.userId,
@@ -387,6 +430,11 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
       if (!ensureJoined(socket, roomKey)) {
         return;
       }
+      logger.debug("Client cleared presence", {
+        userId: socketUser.userId,
+        displayName: socketUser.displayName,
+        roomKey,
+      });
       const update = presenceState.clearPresence(roomKey, socket.id);
       if (update) {
         queueDelta(roomKey, payload.repoId, payload.filePath, {
@@ -396,6 +444,10 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
     });
 
     socket.on("disconnect", () => {
+      logger.info("Client disconnected", {
+        userId: socketUser.userId,
+        displayName: socketUser.displayName,
+      });
       const updates = presenceState.removeSocket(socket.id);
       for (const update of updates) {
         const roomKey = getRoomKey(update.repoId, update.filePath);
