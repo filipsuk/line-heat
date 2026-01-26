@@ -524,25 +524,29 @@ const updateStatusBar = () => {
 	}
 
 	if (!hasRequiredSettings(currentSettings)) {
-		statusBarItem.text = 'LineHeat: Off';
+		statusBarItem.text = '🚫🔥';
 		statusBarItem.tooltip = 'LineHeat is disabled. Configure server URL and token.';
+		statusBarItem.command = 'workbench.action.openSettings?lineheat';
 		return;
 	}
 
 	if (activeRepoState.status === 'nogit') {
-		statusBarItem.text = 'LineHeat: No git';
+		statusBarItem.text = '🚫🔥';
 		statusBarItem.tooltip = 'LineHeat is disabled (no git remote detected).';
+		statusBarItem.command = 'workbench.action.openSettings?lineheat';
 		return;
 	}
 
 	if (activeSocket?.connected) {
-		statusBarItem.text = `LineHeat: ${retentionDays}d`;
-		statusBarItem.tooltip = `LineHeat connected (retention ${retentionDays} days).`;
+		statusBarItem.text = '🔥';
+		statusBarItem.tooltip = `LineHeat connected (retention ${retentionDays} days). Click to open settings.`;
+		statusBarItem.command = 'workbench.action.openSettings?lineheat';
 		return;
 	}
 
-	statusBarItem.text = 'LineHeat: Off';
-	statusBarItem.tooltip = 'LineHeat is disconnected.';
+	statusBarItem.text = '🚫🔥';
+	statusBarItem.tooltip = 'LineHeat is disconnected. Click to open settings.';
+	statusBarItem.command = 'workbench.action.openSettings?lineheat';
 };
 
 const getDefaultRetentionDays = () => protocolModule?.DEFAULT_RETENTION_DAYS ?? 7;
@@ -1379,8 +1383,9 @@ export function activate(context: vscode.ExtensionContext) {
 	const logger = createLogger(settings.logLevel);
 	activeLogger = logger;
 	currentSettings = settings;
-	statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-	statusBarItem.text = 'LineHeat: Off';
+	statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+	statusBarItem.text = '🚫🔥';
+	statusBarItem.tooltip = 'LineHeat';
 	statusBarItem.show();
 
 	const onEditDisposable = vscode.workspace.onDidChangeTextDocument((event) => {
