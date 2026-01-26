@@ -1,11 +1,16 @@
 {
   "name": "line-heat",
+  "version": "0.0.1",
   "private": true,
+  "engines": {
+    "node": ">=18"
+  },
   "workspaces": [
     "packages/*"
   ],
   "scripts": {
     "test": "npm test -w @line-heat/server && npm test -w vscode-extension",
-    "build": "npm run build -w @line-heat/protocol && npm run build -w @line-heat/server && npm run compile -w vscode-extension"
+    "build": "npm run build -w @line-heat/protocol && npm run build -w @line-heat/server && npm run compile -w vscode-extension",
+    "dev:extension": "npm run compile -w vscode-extension && npx --yes @vscode/test-cli --extensionDevelopmentPath=packages/vscode-extension --new-window --no-screenshots"
   }
 }
