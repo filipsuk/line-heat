@@ -168,6 +168,12 @@ const isFunctionSymbol = (symbol: vscode.DocumentSymbol, document: vscode.TextDo
 		return isFunctionExpression;
 	}
 	
+	// Support test functions in JavaScript/TypeScript
+	if (symbol.kind === vscode.SymbolKind.Function) {
+		const name = symbol.name.toLowerCase();
+		return name.includes('describe') || name.includes('it(') || name.includes('test(') || name.includes('beforeeach') || name.includes('aftereach');
+	}
+	
 	return false;
 };
 

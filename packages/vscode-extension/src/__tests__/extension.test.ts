@@ -209,6 +209,58 @@ suite('Line Heat Extension', function () {
 		}
 	});
 
+	test('supports test functions (describe/it)', async () => {
+		const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+		assert.ok(extension, 'Extension not found');
+
+		const api = await extension?.activate();
+		assert.ok(api?.logger, 'Extension did not return logger');
+
+		api?.logger.lines.splice(0, api.logger.lines.length);
+
+		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'line-heat-test-functions-'));
+		try {
+			await runGit(['init'], tempDir);
+			await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
+
+			const filePath = path.join(tempDir, 'test.spec.ts');
+			const fileUri = vscode.Uri.file(filePath);
+			await fs.writeFile(
+				filePath,
+				[
+					"describe('User authentication', () => {",
+					"  describe('login functionality', () => {",
+					"    it('should login with valid credentials', () => {",
+					"      const user = { username: 'test', password: 'pass' };",
+					"      expect(user.username).toBe('test');",
+					"    });",
+					"",
+					"    it('should reject invalid credentials', () => {",
+					"      const user = { username: 'wrong', password: 'wrong' };",
+					"      expect(user.username).toBe('wrong');",
+					"    });",
+					"  });",
+					"});",
+				].join('\n'),
+				'utf8',
+			);
+
+			const doc = await vscode.workspace.openTextDocument(fileUri);
+			const editor = await vscode.window.showTextDocument(doc, { preview: false });
+
+			const expectedFirstTest = `${fileUri.fsPath}:4 functionId=User%20authentication/login%20functionality/should%20login%20with%20valid%20credentials anchorLine=3`;
+			await editAndWaitForLog(api, editor, new vscode.Position(3, 0), 'edit ', expectedFirstTest);
+
+			const expectedSecondTest = `${fileUri.fsPath}:8 functionId=User%20authentication/login%20functionality/should%20reject%20invalid%20credentials anchorLine=7`;
+			await editAndWaitForLog(api, editor, new vscode.Position(7, 0), 'edit ', expectedSecondTest);
+
+			assert.ok(api?.logger.lines.includes(expectedFirstTest), `Missing log entry: ${expectedFirstTest}`);
+			assert.ok(api?.logger.lines.includes(expectedSecondTest), `Missing log entry: ${expectedSecondTest}`);
+		} finally {
+			await fs.rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
 	test('hides own presence from decorations', async () => {
 		const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
 		assert.ok(extension, 'Extension not found');
