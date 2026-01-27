@@ -11,6 +11,7 @@ import {
 	editAndWaitForLog,
 	runGit,
 	sleep,
+	waitForAsync,
 	type ExtensionApi,
 } from './testUtils';
 
@@ -314,77 +315,29 @@ suite('Line Heat Extension', function () {
 		}
 	});
 
-	suite('Heat Line Visualization', function () {
+	suite('Heat CodeLens', function () {
 		this.timeout(30000);
 
-		test('intensity maps to correct heat colors', () => {
-			const { getHeatColorFromIntensity } = require('../extension');
-
-			assert.strictEqual(getHeatColorFromIntensity(0.0), 'rgb(0, 100, 255)', 'Zero intensity should be blue');
-			assert.strictEqual(getHeatColorFromIntensity(0.25), 'rgb(0, 200, 255)', 'Quarter intensity should be cyan');
-			assert.strictEqual(getHeatColorFromIntensity(0.5), 'rgb(255, 255, 0)', 'Half intensity should be yellow');
-			assert.strictEqual(getHeatColorFromIntensity(0.75), 'rgb(255, 150, 0)', 'Three-quarter intensity should be orange');
-			assert.strictEqual(getHeatColorFromIntensity(1.0), 'rgb(255, 0, 0)', 'Full intensity should be red');
-		});
-
-		test('intensity clamping handles out-of-range values', () => {
-			const { getHeatColorFromIntensity } = require('../extension');
-
-			assert.strictEqual(getHeatColorFromIntensity(-0.5), 'rgb(0, 100, 255)', 'Negative intensity should clamp to minimum');
-			assert.strictEqual(getHeatColorFromIntensity(1.5), 'rgb(255, 0, 0)', 'Intensity above 1.0 should clamp to maximum');
-		});
-
-		test('heat gutter icon SVG generation works correctly', () => {
-			const { getHeatGutterIconSvg } = require('../extension');
-
-			const color = 'rgb(255, 150, 0)';
-			const svg = getHeatGutterIconSvg(color);
-			
-			assert.ok(svg, 'Should generate SVG string');
-			assert.ok(svg.includes('<svg'), 'Should be valid SVG');
-			assert.ok(svg.includes('width="18"'), 'Should have width 18');
-			assert.ok(svg.includes('height="18"'), 'Should have height 18');
-			assert.ok(svg.includes('<rect'), 'Should include rectangle element');
-			assert.ok(svg.includes('width="3"'), 'Rectangle should have width 3');
-			assert.ok(svg.includes('height="18"'), 'Rectangle should have height 18');
-			assert.ok(svg.includes('x="13"'), 'Rectangle should be positioned at right edge');
-			assert.ok(svg.includes(`fill="${color}"`), 'Rectangle should fill with specified color');
-		});
-
-		test('heat gutter icon URI generation is deterministic per color', () => {
-			const { getHeatGutterIconUri } = require('../extension');
-
-			const color1 = 'rgb(0, 100, 255)';
-			const color2 = 'rgb(255, 0, 0)';
-			
-			const uri1a = getHeatGutterIconUri(color1);
-			const uri1b = getHeatGutterIconUri(color1);
-			const uri2 = getHeatGutterIconUri(color2);
-			
-			assert.strictEqual(uri1a, uri1b, 'Should return same URI for same color');
-			assert.notStrictEqual(uri1a, uri2, 'Should return different URIs for different colors');
-			
-			const uri1String = uri1a.toString();
-			assert.ok(uri1String.includes('data:'), 'Should be a data URI');
-			
-			const encodedPayload = uri1a.path;
-			const decodedSvg = decodeURIComponent(encodedPayload);
-			
-			assert.ok(decodedSvg.includes('<svg'), 'Decoded payload should be valid SVG');
-			assert.ok(decodedSvg.includes(`fill="${color1}"`), 'Decoded SVG should contain the expected color');
-		});
-
-		test('captures screenshot with heat gutter visualization', async () => {
+		test('provides heat CodeLens with emoji, age, and top editors', async () => {
 			const token = 'devtoken';
-			const otherEmoji = '🦄';
-			const otherName = 'Alice';
+			const editorConfig = vscode.workspace.getConfiguration('editor');
+			const config = vscode.workspace.getConfiguration('lineheat');
+			await editorConfig.update('codeLens', true, vscode.ConfigurationTarget.Global);
+
+			const aliceEmoji = '🦄';
+			const bobEmoji = '🙂';
+			const carolEmoji = '🐱';
+			const aliceName = 'Alice';
+			const bobName = 'Bob';
+			const carolName = 'Carol';
+
 			const mockServer = await startMockLineHeatServer({
 				token,
 				retentionDays: 7,
 				autoRoomSnapshot: ({ room }) => {
 					const now = Date.now();
-					const decayMs = 24 * 60 * 60 * 1000;
-					const betaLastEditAt = now - Math.floor(0.75 * decayMs);
+					const alphaLastEditAt = now - 2 * 60 * 1000;
+					const betaLastEditAt = now - 17 * 60 * 60 * 1000;
 					return {
 						repoId: room.repoId,
 						filePath: room.filePath,
@@ -392,9 +345,11 @@ suite('Line Heat Extension', function () {
 							{
 								functionId: 'alpha',
 								anchorLine: 1,
-								lastEditAt: now,
+								lastEditAt: alphaLastEditAt,
 								topEditors: [
-									{ userId: 'u2', displayName: otherName, emoji: otherEmoji, lastEditAt: now },
+									{ userId: 'u2', displayName: aliceName, emoji: aliceEmoji, lastEditAt: alphaLastEditAt },
+									{ userId: 'u3', displayName: bobName, emoji: bobEmoji, lastEditAt: alphaLastEditAt },
+									{ userId: 'u4', displayName: carolName, emoji: carolEmoji, lastEditAt: alphaLastEditAt },
 								],
 							},
 							{
@@ -402,23 +357,14 @@ suite('Line Heat Extension', function () {
 								anchorLine: 5,
 								lastEditAt: betaLastEditAt,
 								topEditors: [
-									{ userId: 'u2', displayName: otherName, emoji: otherEmoji, lastEditAt: betaLastEditAt },
+									{ userId: 'u2', displayName: aliceName, emoji: aliceEmoji, lastEditAt: betaLastEditAt },
 								],
 							},
 						],
-						presence: [
-							{
-								functionId: 'gamma',
-								anchorLine: 9,
-								users: [
-									{ userId: 'u2', displayName: otherName, emoji: otherEmoji, lastSeenAt: now },
-								],
-							},
-						],
+						presence: [],
 					};
 				},
 			});
-			const config = vscode.workspace.getConfiguration('lineheat');
 
 			await config.update('serverUrl', mockServer.serverUrl, vscode.ConfigurationTarget.Global);
 			await config.update('token', token, vscode.ConfigurationTarget.Global);
@@ -427,7 +373,7 @@ suite('Line Heat Extension', function () {
 			assert.ok(extension, 'Extension not found');
 			await extension.activate();
 
-			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'line-heat-screenshot-'));
+			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'line-heat-codelens-'));
 			try {
 				await runGit(['init'], tempDir);
 				await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
@@ -460,7 +406,105 @@ suite('Line Heat Extension', function () {
 					predicate: (room) => room.filePath === expectedFilePath,
 				});
 
-				await sleep(1750);
+				await waitForAsync(async () => {
+					const result = await vscode.commands.executeCommand('vscode.executeCodeLensProvider', fileUri);
+					const lenses = result as vscode.CodeLens[];
+					const titles = lenses
+						.map((lens) => lens.command?.title)
+						.filter((title): title is string => Boolean(title));
+					const hasHot = titles.some(
+						(title) => title.includes('🔥') && title.includes(`${aliceEmoji} ${aliceName}`),
+					);
+					const hasMild = titles.some(
+						(title) => title.includes('🟡') && title.includes(`${aliceEmoji} ${aliceName}`),
+					);
+					const hasGammaLine = lenses.some((lens) => lens.range.start.line === 8);
+					return hasHot && hasMild && !hasGammaLine;
+				}, 8000);
+			} finally {
+				await fs.rm(tempDir, { recursive: true, force: true });
+				await mockServer.close();
+				await config.update('serverUrl', '', vscode.ConfigurationTarget.Global);
+				await config.update('token', '', vscode.ConfigurationTarget.Global);
+				await editorConfig.update('codeLens', undefined, vscode.ConfigurationTarget.Global);
+			}
+		});
+
+		test('captures screenshot with heat CodeLens', async () => {
+			const token = 'devtoken';
+			const editorConfig = vscode.workspace.getConfiguration('editor');
+			await editorConfig.update('codeLens', true, vscode.ConfigurationTarget.Global);
+
+			const aliceEmoji = '🦄';
+			const aliceName = 'Alice';
+			const bobEmoji = '🙂';
+			const bobName = 'Bob';
+
+			const mockServer = await startMockLineHeatServer({
+				token,
+				retentionDays: 7,
+				autoRoomSnapshot: ({ room }) => {
+					const now = Date.now();
+					const alphaLastEditAt = now - 2 * 60 * 1000;
+					return {
+						repoId: room.repoId,
+						filePath: room.filePath,
+						functions: [
+							{
+								functionId: 'alpha',
+								anchorLine: 1,
+								lastEditAt: alphaLastEditAt,
+								topEditors: [
+									{ userId: 'u2', displayName: aliceName, emoji: aliceEmoji, lastEditAt: alphaLastEditAt },
+									{ userId: 'u3', displayName: bobName, emoji: bobEmoji, lastEditAt: alphaLastEditAt },
+								],
+							},
+						],
+						presence: [],
+					};
+				},
+			});
+			const config = vscode.workspace.getConfiguration('lineheat');
+
+			await config.update('serverUrl', mockServer.serverUrl, vscode.ConfigurationTarget.Global);
+			await config.update('token', token, vscode.ConfigurationTarget.Global);
+
+			const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+			assert.ok(extension, 'Extension not found');
+			await extension.activate();
+
+			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'line-heat-screenshot-'));
+			try {
+				await runGit(['init'], tempDir);
+				await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
+
+				const filePath = path.join(tempDir, 'heat.ts');
+				const fileUri = vscode.Uri.file(filePath);
+				await fs.writeFile(
+					filePath,
+					[
+						'function alpha() {',
+						'  return 1;',
+						'}',
+					].join('\n'),
+					'utf8',
+				);
+
+				const doc = await vscode.workspace.openTextDocument(fileUri);
+				await vscode.window.showTextDocument(doc, { preview: false });
+
+				const expectedFilePath = path.relative(tempDir, filePath).split(path.sep).join('/');
+				await mockServer.waitForRoomJoin({
+					predicate: (room) => room.filePath === expectedFilePath,
+				});
+
+				await waitForAsync(async () => {
+					const result = await vscode.commands.executeCommand('vscode.executeCodeLensProvider', fileUri);
+					const lenses = result as vscode.CodeLens[];
+					return lenses.some((lens) => (lens.command?.title ?? '').includes('🔥'));
+				}, 8000);
+
+				await sleep(1250);
 
 				const port = Number(process.env.VSCODE_REMOTE_DEBUGGING_PORT ?? '9222');
 				const png = await cdpCaptureScreenshotPng({ port });
@@ -470,7 +514,7 @@ suite('Line Heat Extension', function () {
 					path.join(process.cwd(), '.vscode-test-artifacts');
 				const screenshotDir = path.join(artifactsRoot, 'screenshots');
 				await fs.mkdir(screenshotDir, { recursive: true });
-				const screenshotPath = path.join(screenshotDir, 'heat-gutter.png');
+				const screenshotPath = path.join(screenshotDir, 'heat-codelens.png');
 				await fs.writeFile(screenshotPath, png);
 				const stat = await fs.stat(screenshotPath);
 				assert.ok(stat.size > 0, 'Expected screenshot PNG to be non-empty');
@@ -479,6 +523,7 @@ suite('Line Heat Extension', function () {
 				await mockServer.close();
 				await config.update('serverUrl', '', vscode.ConfigurationTarget.Global);
 				await config.update('token', '', vscode.ConfigurationTarget.Global);
+				await editorConfig.update('codeLens', undefined, vscode.ConfigurationTarget.Global);
 			}
 		});
 	});

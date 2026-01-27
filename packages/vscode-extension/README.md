@@ -72,7 +72,7 @@ When connected, the status bar shows the server retention (example: `LineHeat: 7
 VS Code extension tests run inside an Electron-hosted workbench. VS Code does not expose a public screenshot API to extensions/tests, so the test suite captures screenshots by enabling Chromium remote debugging and using CDP (`Page.captureScreenshot`).
 
 - Run: `npm test -w vscode-extension`
-- Output: `packages/vscode-extension/.vscode-test-artifacts/screenshots/heat-gutter.png` (overwritten each run)
+- Output: `packages/vscode-extension/.vscode-test-artifacts/screenshots/heat-codelens.png` (overwritten each run)
 - Env vars:
   - `VSCODE_REMOTE_DEBUGGING_PORT` (default `9222`)
   - `VSCODE_TEST_ARTIFACTS` (default `packages/vscode-extension/.vscode-test-artifacts`)
