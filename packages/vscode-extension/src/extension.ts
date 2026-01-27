@@ -526,27 +526,23 @@ const updateStatusBar = () => {
 	if (!hasRequiredSettings(currentSettings)) {
 		statusBarItem.text = '🚫🔥';
 		statusBarItem.tooltip = 'LineHeat is disabled. Configure server URL and token.';
-		statusBarItem.command = 'workbench.action.openSettings?lineheat';
 		return;
 	}
 
 	if (activeRepoState.status === 'nogit') {
 		statusBarItem.text = '🚫🔥';
 		statusBarItem.tooltip = 'LineHeat is disabled (no git remote detected).';
-		statusBarItem.command = 'workbench.action.openSettings?lineheat';
 		return;
 	}
 
 	if (activeSocket?.connected) {
 		statusBarItem.text = '🔥';
 		statusBarItem.tooltip = `LineHeat connected (retention ${retentionDays} days). Click to open settings.`;
-		statusBarItem.command = 'workbench.action.openSettings?lineheat';
 		return;
 	}
 
 	statusBarItem.text = '🚫🔥';
 	statusBarItem.tooltip = 'LineHeat is disconnected. Click to open settings.';
-	statusBarItem.command = 'workbench.action.openSettings?lineheat';
 };
 
 const getDefaultRetentionDays = () => protocolModule?.DEFAULT_RETENTION_DAYS ?? 7;
@@ -1386,6 +1382,7 @@ export function activate(context: vscode.ExtensionContext) {
 	statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
 	statusBarItem.text = '🚫🔥';
 	statusBarItem.tooltip = 'LineHeat';
+	statusBarItem.command = { command: 'workbench.action.openSettings', arguments: ['lineheat'], title: 'Open LineHeat settings'};
 	statusBarItem.show();
 
 	const onEditDisposable = vscode.workspace.onDidChangeTextDocument((event) => {
