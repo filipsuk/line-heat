@@ -28,6 +28,21 @@ export const waitFor = async (condition: () => boolean, timeoutMs: number, conte
 	throw new Error(`Timed out waiting for condition${context ? `: ${context}` : ''}`);
 };
 
+export const waitForAsync = async (
+	condition: () => Promise<boolean>,
+	timeoutMs: number,
+	context?: string,
+) => {
+	const start = Date.now();
+	while (Date.now() - start < timeoutMs) {
+		if (await condition()) {
+			return;
+		}
+		await sleep(50);
+	}
+	throw new Error(`Timed out waiting for condition${context ? `: ${context}` : ''}`);
+};
+
 export const runGit = async (args: string[], cwd: string) =>
 	new Promise<void>((resolve, reject) => {
 		execFile('git', args, { cwd }, (error) => {

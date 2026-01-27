@@ -212,10 +212,10 @@ const gitTimeoutMs = 1500;
 const maxSubscribedRooms = 10;
 const renderThrottleMs = 200;
 
-const heatDecorationTypes = new Map<string, vscode.TextEditorDecorationType>();
-const heatGutterIconUriCache = new Map<string, vscode.Uri>();
 let presenceDecorationType: vscode.TextEditorDecorationType | undefined;
 const unmappedFunctionLogTimestamps = new Map<string, number>();
+
+let heatCodeLensProvider: HeatCodeLensProvider | undefined;
 
 const createLogger = (level: LogLevel): LineHeatLogger => {
 	const output = vscode.window.createOutputChannel('LineHeat', { log: true });
@@ -282,50 +282,110 @@ const formatRelativeTime = (now: number, timestamp: number) => {
 const formatUserLabel = (user: { emoji: string; displayName: string }) =>
 	`${user.emoji} ${user.displayName}`.trim();
 
-export const getHeatColorFromIntensity = (intensity: number): string => {
-	const clampedIntensity = Math.min(1.0, Math.max(0.0, intensity));
-	
-	if (clampedIntensity <= 0.125) {
-		return 'rgb(0, 100, 255)';
-	} else if (clampedIntensity <= 0.375) {
-		return 'rgb(0, 200, 255)';
-	} else if (clampedIntensity <= 0.625) {
-		return 'rgb(255, 255, 0)';
-	} else if (clampedIntensity <= 0.875) {
-		return 'rgb(255, 150, 0)';
-	} else {
-		return 'rgb(255, 0, 0)';
+const computeHeatIntensity = (now: number, lastEditAt: number, decayMs: number) => {
+	if (decayMs <= 0) {
+		return 0;
 	}
+	const ageMs = Math.max(0, now - lastEditAt);
+	return Math.min(1, Math.max(0, 1 - ageMs / decayMs));
 };
 
-export const getHeatGutterIconSvg = (color: string) =>
-	`<svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg"><rect x="13" y="0" width="3" height="18" fill="${color}" /></svg>`;
-
-export const getHeatGutterIconUri = (color: string) => {
-	const cached = heatGutterIconUriCache.get(color);
-	if (cached) {
-		return cached;
+const getHeatEmojiFromIntensity = (intensity: number) => {
+	if (intensity >= 0.75) {
+		return '🔥';
 	}
-	const svg = getHeatGutterIconSvg(color);
-	const dataUri = `data:image/svg+xml,${encodeURIComponent(svg)}`;
-	const uri = vscode.Uri.parse(dataUri);
-	heatGutterIconUriCache.set(color, uri);
-	return uri;
+	if (intensity >= 0.5) {
+		return '🟠';
+	}
+	if (intensity >= 0.25) {
+		return '🟡';
+	}
+	return '🔵';
 };
 
-export const getHeatDecorationType = (color: string) => {
-	const cached = heatDecorationTypes.get(color);
-	if (cached) {
-		return cached;
-	}
-	const decoration = vscode.window.createTextEditorDecorationType({
-		isWholeLine: false,
-		gutterIconPath: getHeatGutterIconUri(color),
-		gutterIconSize: 'contain',
-	});
-	heatDecorationTypes.set(color, decoration);
-	return decoration;
+type HeatLensData = {
+	functionId: string;
+	lastEditAt: number;
+	editors: string[];
 };
+
+class HeatCodeLensProvider implements vscode.CodeLensProvider {
+	private readonly onDidChangeEmitter = new vscode.EventEmitter<void>();
+	public readonly onDidChangeCodeLenses = this.onDidChangeEmitter.event;
+
+	refresh() {
+		this.onDidChangeEmitter.fire();
+	}
+
+	async provideCodeLenses(document: vscode.TextDocument): Promise<vscode.CodeLens[]> {
+		const logger = activeLogger;
+		if (!logger) {
+			return [];
+		}
+		if (document.uri.scheme !== 'file') {
+			return [];
+		}
+		const repoContext = await resolveRepoContext(document.uri.fsPath, logger);
+		if (!repoContext) {
+			return [];
+		}
+		const roomKey = getRoomKey({ repoId: repoContext.repoId, filePath: repoContext.filePath });
+		const roomState = roomStateByKey.get(roomKey);
+		if (!roomState) {
+			return [];
+		}
+		const index = await getDocumentFunctionIndex(document, logger);
+		if (index.size === 0) {
+			return [];
+		}
+		const decayHours = currentSettings?.heatDecayHours ?? 24;
+		const decayMs = decayHours > 0 ? decayHours * 60 * 60 * 1000 : 0;
+		if (decayMs <= 0) {
+			return [];
+		}
+		const now = Date.now();
+
+		const lenses: vscode.CodeLens[] = [];
+		for (const heat of roomState.heatByFunctionId.values()) {
+			const intensity = computeHeatIntensity(now, heat.lastEditAt, decayMs);
+			if (intensity <= 0) {
+				continue;
+			}
+			const entry = resolveFunctionSymbolEntry(index, heat.functionId, heat.anchorLine);
+			if (!entry) {
+				continue;
+			}
+
+			const editorLabels = (heat.topEditors ?? [])
+				.filter((editorEntry) => now - editorEntry.lastEditAt <= decayMs)
+				.slice(0, 3)
+				.map(formatUserLabel);
+			if (editorLabels.length === 0) {
+				continue;
+			}
+
+			const emoji = getHeatEmojiFromIntensity(intensity);
+			const age = formatRelativeTime(now, heat.lastEditAt);
+			const title = `${emoji} ${age} · ${editorLabels.join(' ')}`;
+			const data: HeatLensData = {
+				functionId: heat.functionId,
+				lastEditAt: heat.lastEditAt,
+				editors: editorLabels,
+			};
+			const line = Math.max(0, entry.anchorLine - 1);
+			const range = new vscode.Range(new vscode.Position(line, 0), new vscode.Position(line, 0));
+			lenses.push(
+				new vscode.CodeLens(range, {
+					title,
+					command: 'lineheat.showHeatDetails',
+					arguments: [data],
+					tooltip: `Last edit: ${age}\nEditors: ${editorLabels.join(', ')}`,
+				}),
+			);
+		}
+		return lenses;
+	}
+}
 
 const getPresenceDecorationType = () => {
 	if (!presenceDecorationType) {
@@ -745,6 +805,7 @@ const connectSocket = (
 
 	socket.on(protocol.EVENT_ROOM_SNAPSHOT, (payload: RoomSnapshotPayload) => {
 		updateRoomStateFromSnapshot(payload);
+		heatCodeLensProvider?.refresh();
 		if (
 			activeRoomContext &&
 			payload.repoId === activeRoomContext.repoId &&
@@ -756,6 +817,7 @@ const connectSocket = (
 
 	socket.on(protocol.EVENT_FILE_DELTA, (payload: FileDeltaPayload) => {
 		updateRoomStateFromDelta(payload);
+		heatCodeLensProvider?.refresh();
 		if (
 			activeRoomContext &&
 			payload.repoId === activeRoomContext.repoId &&
@@ -776,6 +838,7 @@ const connectSocket = (
 			clearDecorations(lastDecoratedEditor);
 			lastDecoratedEditor = undefined;
 		}
+		heatCodeLensProvider?.refresh();
 		updateStatusBar();
 	});
 
@@ -1369,9 +1432,6 @@ const buildTooltip = (params: {
 };
 
 const clearDecorations = (editor: vscode.TextEditor) => {
-	for (const decoration of heatDecorationTypes.values()) {
-		editor.setDecorations(decoration, []);
-	}
 	if (presenceDecorationType) {
 		editor.setDecorations(presenceDecorationType, []);
 	}
@@ -1408,20 +1468,10 @@ const renderDecorations = async (logger: LineHeatLogger) => {
 	const decayHours = currentSettings?.heatDecayHours ?? 24;
 	const decayMs = decayHours > 0 ? decayHours * 60 * 60 * 1000 : 0;
 	const now = Date.now();
-	const heatDecorations = new Map<string, vscode.DecorationOptions[]>();
 	const presenceDecorations: vscode.DecorationOptions[] = [];
-	const functionIds = new Set<string>([
-		...roomState.heatByFunctionId.keys(),
-		...roomState.presenceByFunctionId.keys(),
-	]);
-	for (const functionId of functionIds) {
+	for (const [functionId, presence] of roomState.presenceByFunctionId.entries()) {
 		const heat = roomState.heatByFunctionId.get(functionId);
-		const presence = roomState.presenceByFunctionId.get(functionId);
-		const anchorLine = heat?.anchorLine ?? presence?.anchorLine;
-		if (!anchorLine) {
-			continue;
-		}
-		const entry = resolveFunctionSymbolEntry(index, functionId, anchorLine);
+		const entry = resolveFunctionSymbolEntry(index, functionId, presence.anchorLine);
 		if (!entry) {
 			logUnmappedFunction(logger, roomKey, functionId);
 			continue;
@@ -1440,16 +1490,6 @@ const renderDecorations = async (logger: LineHeatLogger) => {
 			editorLabels,
 			presenceLabels,
 		});
-		if (heat && decayMs > 0) {
-			const ageMs = Math.max(0, now - heat.lastEditAt);
-			const intensity = Math.min(1, Math.max(0, 1 - ageMs / decayMs));
-			if (intensity > 0) {
-				const color = getHeatColorFromIntensity(intensity);
-				const list = heatDecorations.get(color) ?? [];
-				list.push({ range: line.range, hoverMessage: tooltip });
-				heatDecorations.set(color, list);
-			}
-		}
 		if (presence && presence.users.length > 0) {
 			// Filter out current user's presence from display
 			const otherUsers = presence.users.filter(user => user.userId !== userId);
@@ -1473,15 +1513,6 @@ const renderDecorations = async (logger: LineHeatLogger) => {
 		}
 	}
 	const presenceType = getPresenceDecorationType();
-	for (const [color, decorations] of heatDecorations.entries()) {
-		const decorationType = getHeatDecorationType(color);
-		editor.setDecorations(decorationType, decorations);
-	}
-	for (const [alphaKey, decorationType] of heatDecorationTypes.entries()) {
-		if (!heatDecorations.has(alphaKey)) {
-			editor.setDecorations(decorationType, []);
-		}
-	}
 	editor.setDecorations(presenceType, presenceDecorations);
 };
 
@@ -1505,6 +1536,21 @@ export function activate(context: vscode.ExtensionContext) {
 	statusBarItem.tooltip = 'LineHeat';
 	statusBarItem.command = { command: 'workbench.action.openSettings', arguments: ['lineheat'], title: 'Open LineHeat settings'};
 	statusBarItem.show();
+
+	heatCodeLensProvider = new HeatCodeLensProvider();
+	context.subscriptions.push(
+		vscode.languages.registerCodeLensProvider({ scheme: 'file' }, heatCodeLensProvider),
+		vscode.commands.registerCommand('lineheat.showHeatDetails', (data: HeatLensData) => {
+			const label = formatFunctionLabel(data.functionId);
+			const age = formatRelativeTime(Date.now(), data.lastEditAt);
+			void vscode.window.showInformationMessage(
+				`LineHeat: ${label} · ${age} · ${data.editors.length > 0 ? data.editors.join(' ') : 'unknown'}`,
+			);
+		}),
+		{ dispose: () => {
+			heatCodeLensProvider = undefined;
+		} },
+	);
 
 	const onEditDisposable = vscode.workspace.onDidChangeTextDocument((event) => {
 		if (event.contentChanges.length === 0) {
@@ -1561,6 +1607,7 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 		const shouldRender = event.affectsConfiguration('lineheat.heatDecayHours');
 		refreshConnection(logger);
+		heatCodeLensProvider?.refresh();
 		if (shouldRender) {
 			scheduleRender(logger);
 		}
@@ -1644,8 +1691,5 @@ export function getLoggerForTests(): { lines: string[] } | undefined {
 		presenceDecorationType.dispose();
 		presenceDecorationType = undefined;
 	}
-	for (const decoration of heatDecorationTypes.values()) {
-		decoration.dispose();
-	}
-	heatDecorationTypes.clear();
+	heatCodeLensProvider = undefined;
 }
