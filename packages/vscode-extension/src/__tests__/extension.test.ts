@@ -226,14 +226,46 @@ suite('Line Heat Extension', function () {
 		}
 	});
 
-	test('hides own presence from decorations', async () => {
+	test('does not show own presence in CodeLens', async () => {
+		const token = 'devtoken';
+		const editorConfig = vscode.workspace.getConfiguration('editor');
+		const config = vscode.workspace.getConfiguration('lineheat');
+		await editorConfig.update('codeLens', true, vscode.ConfigurationTarget.Global);
+		await config.update('serverUrl', '', vscode.ConfigurationTarget.Global);
+		await config.update('token', '', vscode.ConfigurationTarget.Global);
+		await config.update('displayName', 'Me', vscode.ConfigurationTarget.Global);
+		await config.update('emoji', '😎', vscode.ConfigurationTarget.Global);
+
+		const mockServer = await startMockLineHeatServer({
+			token,
+			retentionDays: 7,
+			autoRoomSnapshot: ({ room, auth }) => {
+				const ownUserId = auth?.userId ?? 'unknown';
+				const now = Date.now();
+				return {
+					repoId: room.repoId,
+					filePath: room.filePath,
+					functions: [],
+					presence: [
+						{
+							functionId: 'testFunction',
+							anchorLine: 1,
+							users: [
+								{ userId: ownUserId, displayName: 'Me', emoji: '😎', lastSeenAt: now },
+								{ userId: 'u2', displayName: 'Alice', emoji: '🦄', lastSeenAt: now },
+							],
+						},
+					],
+				};
+			},
+		});
+
+		await config.update('serverUrl', mockServer.serverUrl, vscode.ConfigurationTarget.Global);
+		await config.update('token', token, vscode.ConfigurationTarget.Global);
+
 		const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
 		assert.ok(extension, 'Extension not found');
-
-		const api = await extension?.activate();
-		assert.ok(api?.logger, 'Extension did not return logger');
-
-		api?.logger.lines.splice(0, api.logger.lines.length);
+		await extension.activate();
 
 		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'line-heat-own-presence-'));
 		try {
@@ -249,16 +281,31 @@ suite('Line Heat Extension', function () {
 			);
 
 			const doc = await vscode.workspace.openTextDocument(fileUri);
-			const editor = await vscode.window.showTextDocument(doc, { preview: false });
+			await vscode.window.showTextDocument(doc, { preview: false });
 
-			const expectedLog = `${fileUri.fsPath}:2 functionId=testFunction anchorLine=1`;
-			await editAndWaitForLog(api, editor, new vscode.Position(1, 0), 'edit ', expectedLog);
+			const expectedFilePath = path.relative(tempDir, filePath).split(path.sep).join('/');
+			await mockServer.waitForRoomJoin({
+				predicate: (room) => room.filePath === expectedFilePath,
+			});
 
-			assert.ok(api?.logger.lines.includes(expectedLog), `Missing log entry: ${expectedLog}`);
-
-			assert.ok(true, 'Own presence hiding infrastructure in place');
+			await waitForAsync(async () => {
+				const result = await vscode.commands.executeCommand('vscode.executeCodeLensProvider', fileUri);
+				const lenses = result as vscode.CodeLens[];
+				const titles = lenses
+					.map((lens) => lens.command?.title)
+					.filter((title): title is string => Boolean(title));
+				const hasOther = titles.some((title) => title.includes('👀 live:') && title.includes('🦄 Alice'));
+				const hasSelf = titles.some((title) => title.includes('😎 Me'));
+				return hasOther && !hasSelf;
+			}, 8000);
 		} finally {
 			await fs.rm(tempDir, { recursive: true, force: true });
+			await mockServer.close();
+			await config.update('serverUrl', '', vscode.ConfigurationTarget.Global);
+			await config.update('token', '', vscode.ConfigurationTarget.Global);
+			await config.update('displayName', '', vscode.ConfigurationTarget.Global);
+			await config.update('emoji', '', vscode.ConfigurationTarget.Global);
+			await editorConfig.update('codeLens', undefined, vscode.ConfigurationTarget.Global);
 		}
 	});
 
@@ -334,14 +381,14 @@ suite('Line Heat Extension', function () {
 			const mockServer = await startMockLineHeatServer({
 				token,
 				retentionDays: 7,
-				autoRoomSnapshot: ({ room }) => {
-					const now = Date.now();
-					const alphaLastEditAt = now - 2 * 60 * 1000;
-					const betaLastEditAt = now - 17 * 60 * 60 * 1000;
-					return {
-						repoId: room.repoId,
-						filePath: room.filePath,
-						functions: [
+					autoRoomSnapshot: ({ room }) => {
+						const now = Date.now();
+						const alphaLastEditAt = now - 2 * 60 * 1000;
+						const betaLastEditAt = now - 17 * 60 * 60 * 1000;
+						return {
+							repoId: room.repoId,
+							filePath: room.filePath,
+							functions: [
 							{
 								functionId: 'alpha',
 								anchorLine: 1,
@@ -359,12 +406,20 @@ suite('Line Heat Extension', function () {
 								topEditors: [
 									{ userId: 'u2', displayName: aliceName, emoji: aliceEmoji, lastEditAt: betaLastEditAt },
 								],
-							},
-						],
-						presence: [],
-					};
-				},
-			});
+								},
+							],
+							presence: [
+								{
+									functionId: 'alpha',
+									anchorLine: 1,
+									users: [
+										{ userId: 'u5', displayName: carolName, emoji: carolEmoji, lastSeenAt: now },
+									],
+								},
+							],
+						};
+					},
+				});
 
 			await config.update('serverUrl', mockServer.serverUrl, vscode.ConfigurationTarget.Global);
 			await config.update('token', token, vscode.ConfigurationTarget.Global);
@@ -418,8 +473,11 @@ suite('Line Heat Extension', function () {
 					const hasMild = titles.some(
 						(title) => title.includes('🟡') && title.includes(`${aliceEmoji} ${aliceName}`),
 					);
+					const hasPresence = titles.some(
+						(title) => title.includes('👀 live:') && title.includes(`${carolEmoji} ${carolName}`),
+					);
 					const hasGammaLine = lenses.some((lens) => lens.range.start.line === 8);
-					return hasHot && hasMild && !hasGammaLine;
+					return hasHot && hasMild && hasPresence && !hasGammaLine;
 				}, 8000);
 			} finally {
 				await fs.rm(tempDir, { recursive: true, force: true });
@@ -460,7 +518,15 @@ suite('Line Heat Extension', function () {
 								],
 							},
 						],
-						presence: [],
+						presence: [
+							{
+								functionId: 'alpha',
+								anchorLine: 1,
+								users: [
+									{ userId: 'u9', displayName: bobName, emoji: bobEmoji, lastSeenAt: now },
+								],
+							},
+						],
 					};
 				},
 			});
@@ -501,7 +567,10 @@ suite('Line Heat Extension', function () {
 				await waitForAsync(async () => {
 					const result = await vscode.commands.executeCommand('vscode.executeCodeLensProvider', fileUri);
 					const lenses = result as vscode.CodeLens[];
-					return lenses.some((lens) => (lens.command?.title ?? '').includes('🔥'));
+					return lenses.some((lens) => {
+						const title = lens.command?.title ?? '';
+						return title.includes('🔥') && title.includes('👀 live:');
+					});
 				}, 8000);
 
 				await sleep(1250);
