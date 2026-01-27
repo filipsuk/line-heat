@@ -4,17 +4,48 @@ import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import type {
-	FileDeltaPayload,
-	RoomSnapshotPayload,
-	ServerHelloPayload,
-	ServerIncompatiblePayload,
-	} from '@line-heat/protocol' with {
-		'resolution-mode': 'require',
-	};
 import { io, Socket } from 'socket.io-client';
 
 type LogLevel = 'error' | 'warn' | 'info' | 'debug';
+
+type HeatEntry = {
+	functionId: string;
+	anchorLine: number;
+	lastEditAt: number;
+	topEditors: Array<{ lastEditAt: number; emoji: string; displayName: string; userId: string }>;
+};
+
+type PresenceEntry = {
+	functionId: string;
+	anchorLine: number;
+	users: Array<{ userId: string; emoji: string; displayName: string }>;
+};
+
+type FileDeltaPayload = {
+	repoId: string;
+	filePath: string;
+	updates: {
+		heat?: HeatEntry[];
+		presence?: PresenceEntry[];
+	};
+};
+
+type RoomSnapshotPayload = {
+	repoId: string;
+	filePath: string;
+	functions: HeatEntry[];
+	presence: PresenceEntry[];
+};
+
+type ServerHelloPayload = {
+	serverRetentionDays: number;
+};
+
+type ServerIncompatiblePayload = {
+	serverProtocolVersion: string;
+	minClientProtocolVersion: string;
+	message: string;
+};
 
 type ProtocolModule = {
 	DEFAULT_RETENTION_DAYS: number;
@@ -182,6 +213,7 @@ const maxSubscribedRooms = 10;
 const renderThrottleMs = 200;
 
 const heatDecorationTypes = new Map<string, vscode.TextEditorDecorationType>();
+const heatGutterIconUriCache = new Map<string, vscode.Uri>();
 let presenceDecorationType: vscode.TextEditorDecorationType | undefined;
 const unmappedFunctionLogTimestamps = new Map<string, number>();
 
@@ -250,18 +282,48 @@ const formatRelativeTime = (now: number, timestamp: number) => {
 const formatUserLabel = (user: { emoji: string; displayName: string }) =>
 	`${user.emoji} ${user.displayName}`.trim();
 
-const getHeatDecorationType = (alpha: number) => {
-	const clampedAlpha = Math.min(0.3, Math.max(0, alpha));
-	const alphaKey = clampedAlpha.toFixed(3);
-	const cached = heatDecorationTypes.get(alphaKey);
+export const getHeatColorFromIntensity = (intensity: number): string => {
+	const clampedIntensity = Math.min(1.0, Math.max(0.0, intensity));
+	
+	if (clampedIntensity <= 0.125) {
+		return 'rgb(0, 100, 255)';
+	} else if (clampedIntensity <= 0.375) {
+		return 'rgb(0, 200, 255)';
+	} else if (clampedIntensity <= 0.625) {
+		return 'rgb(255, 255, 0)';
+	} else if (clampedIntensity <= 0.875) {
+		return 'rgb(255, 150, 0)';
+	} else {
+		return 'rgb(255, 0, 0)';
+	}
+};
+
+export const getHeatGutterIconSvg = (color: string) =>
+	`<svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg"><rect x="13" y="0" width="3" height="18" fill="${color}" /></svg>`;
+
+export const getHeatGutterIconUri = (color: string) => {
+	const cached = heatGutterIconUriCache.get(color);
+	if (cached) {
+		return cached;
+	}
+	const svg = getHeatGutterIconSvg(color);
+	const dataUri = `data:image/svg+xml,${encodeURIComponent(svg)}`;
+	const uri = vscode.Uri.parse(dataUri);
+	heatGutterIconUriCache.set(color, uri);
+	return uri;
+};
+
+export const getHeatDecorationType = (color: string) => {
+	const cached = heatDecorationTypes.get(color);
 	if (cached) {
 		return cached;
 	}
 	const decoration = vscode.window.createTextEditorDecorationType({
-		isWholeLine: true,
-		backgroundColor: `rgba(255, 176, 32, ${alphaKey})`,
+		isWholeLine: false,
+		gutterIconPath: getHeatGutterIconUri(color),
+		gutterIconSize: 'contain',
 	});
-	heatDecorationTypes.set(alphaKey, decoration);
+	heatDecorationTypes.set(color, decoration);
 	return decoration;
 };
 
@@ -419,6 +481,67 @@ const resolveFunctionInfoFromSymbols = (
 		return null;
 	}
 	return { functionId: best.functionId, anchorLine: best.anchorLine };
+};
+
+const resolveFunctionInfoFromTestBlocks = (
+	position: vscode.Position,
+	document: vscode.TextDocument,
+): FunctionInfo | null => {
+	const maxLine = Math.min(position.line, document.lineCount - 1);
+	const getCallName = (text: string, keyword: 'describe' | 'it' | 'test') => {
+		const match = keyword === 'describe'
+			? text.match(/describe\s*\(\s*(["'])([^"']+)\1/)
+			: text.match(/(?:it|test)\s*\(\s*(["'])([^"']+)\1/);
+		return match ? match[2] : undefined;
+	};
+	let testLine = -1;
+	let testName: string | undefined;
+	for (let lineIndex = maxLine; lineIndex >= 0; lineIndex -= 1) {
+		const text = document.lineAt(lineIndex).text;
+		const name = getCallName(text, 'it') ?? getCallName(text, 'test');
+		if (name) {
+			testLine = lineIndex;
+			testName = name;
+			break;
+		}
+	}
+	if (!testName || testLine < 0) {
+		return null;
+	}
+	const describeStack: Array<{ name: string; depth: number }> = [];
+	let braceDepth = 0;
+	for (let lineIndex = 0; lineIndex <= testLine; lineIndex += 1) {
+		const text = document.lineAt(lineIndex).text;
+		const name = getCallName(text, 'describe');
+		const openCount = (text.match(/{/g) ?? []).length;
+		const closeCount = (text.match(/}/g) ?? []).length;
+		const nextDepth = braceDepth + openCount - closeCount;
+		if (name) {
+			const depth = openCount > 0 ? nextDepth : braceDepth + 1;
+			describeStack.push({ name, depth });
+		}
+		braceDepth = nextDepth;
+		while (describeStack.length > 0 && describeStack[describeStack.length - 1].depth > braceDepth) {
+			describeStack.pop();
+		}
+	}
+	const describeNames = describeStack.map((entry) => entry.name);
+	const segments = [...describeNames, testName].map((name) => encodeSymbolName(name));
+	const anchorLine = position.line === testLine ? testLine : testLine + 1;
+	return { functionId: segments.join('/'), anchorLine };
+};
+
+const resolveFunctionInfo = (
+	symbols: vscode.DocumentSymbol[],
+	position: vscode.Position,
+	document: vscode.TextDocument,
+): FunctionInfo | null => {
+	const symbolInfo = resolveFunctionInfoFromSymbols(symbols, position, document);
+	const testInfo = resolveFunctionInfoFromTestBlocks(position, document);
+	if (testInfo) {
+		return testInfo;
+	}
+	return symbolInfo;
 };
 
 const buildDocumentFunctionIndex = (symbols: vscode.DocumentSymbol[], document: vscode.TextDocument) => {
@@ -1043,7 +1166,7 @@ const updateDesiredPresenceFromEditor = async (editor: vscode.TextEditor | undef
 		return;
 	}
 	const symbols = await getDocumentSymbols(editor.document, logger);
-	const functionInfo = resolveFunctionInfoFromSymbols(symbols, editor.selection.active, editor.document);
+	const functionInfo = resolveFunctionInfo(symbols, editor.selection.active, editor.document);
 	if (!functionInfo) {
 		desiredPresence = undefined;
 		return;
@@ -1321,11 +1444,10 @@ const renderDecorations = async (logger: LineHeatLogger) => {
 			const ageMs = Math.max(0, now - heat.lastEditAt);
 			const intensity = Math.min(1, Math.max(0, 1 - ageMs / decayMs));
 			if (intensity > 0) {
-				const alpha = 0.05 + 0.25 * intensity;
-				const alphaKey = Math.min(0.3, alpha).toFixed(3);
-				const list = heatDecorations.get(alphaKey) ?? [];
+				const color = getHeatColorFromIntensity(intensity);
+				const list = heatDecorations.get(color) ?? [];
 				list.push({ range: line.range, hoverMessage: tooltip });
-				heatDecorations.set(alphaKey, list);
+				heatDecorations.set(color, list);
 			}
 		}
 		if (presence && presence.users.length > 0) {
@@ -1351,9 +1473,8 @@ const renderDecorations = async (logger: LineHeatLogger) => {
 		}
 	}
 	const presenceType = getPresenceDecorationType();
-	for (const [alphaKey, decorations] of heatDecorations.entries()) {
-		const alpha = Number(alphaKey);
-		const decorationType = getHeatDecorationType(alpha);
+	for (const [color, decorations] of heatDecorations.entries()) {
+		const decorationType = getHeatDecorationType(color);
 		editor.setDecorations(decorationType, decorations);
 	}
 	for (const [alphaKey, decorationType] of heatDecorationTypes.entries()) {
@@ -1403,12 +1524,12 @@ export function activate(context: vscode.ExtensionContext) {
 			const functionUpdates = new Map<string, FunctionInfo>();
 			for (const change of event.contentChanges) {
 				const line = change.range.start.line + 1;
-				if (!changesByLine.has(line)) {
-					const functionInfo = resolveFunctionInfoFromSymbols(symbols, change.range.start, event.document);
-					changesByLine.set(line, functionInfo);
-					if (functionInfo && !functionUpdates.has(functionInfo.functionId)) {
-						functionUpdates.set(functionInfo.functionId, functionInfo);
-					}
+					if (!changesByLine.has(line)) {
+						const functionInfo = resolveFunctionInfo(symbols, change.range.start, event.document);
+						changesByLine.set(line, functionInfo);
+						if (functionInfo && !functionUpdates.has(functionInfo.functionId)) {
+							functionUpdates.set(functionInfo.functionId, functionInfo);
+						}
 				}
 			}
 			const roomKey = context ? getRoomKey({ repoId: context.repoId, filePath: context.filePath }) : undefined;

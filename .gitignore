@@ -8,7 +8,10 @@ pnpm-debug.log*
 out/
 dist/
 .vscode-test/
+.vscode-test-artifacts/
 *.vsix
+
+.sisyphus/
 
 # Local LineHeat data (sqlite, etc)
 .lineheat/
