@@ -174,6 +174,59 @@ suite('Line Heat Extension', function () {
 		}
 	});
 
+	test('does not treat nested const arrow functions as separate blocks', async () => {
+		const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+		assert.ok(extension, 'Extension not found');
+
+		const api = await extension?.activate();
+		assert.ok(api?.logger, 'Extension did not return logger');
+
+		api?.logger.lines.splice(0, api.logger.lines.length);
+
+		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'line-heat-nested-const-'));
+		try {
+			await runGit(['init'], tempDir);
+			await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
+
+			const filePath = path.join(tempDir, 'nested-const.ts');
+			const fileUri = vscode.Uri.file(filePath);
+			await fs.writeFile(
+				filePath,
+				[
+					'type LogLevel = "info" | "debug";',
+					'type LineHeatLogger = { log: (message: string) => void };',
+					'',
+					'const createLogger = (level: LogLevel): LineHeatLogger => {',
+					'  const secondLevelVariable = () => {',
+					'    const inner = 1;',
+					'    return inner;',
+					'  };',
+					'',
+					'  return {',
+					'    log: () => secondLevelVariable(),',
+					'  };',
+					'};',
+				].join('\n'),
+				'utf8',
+			);
+
+			const doc = await vscode.workspace.openTextDocument(fileUri);
+			const editor = await vscode.window.showTextDocument(doc, { preview: false });
+
+			const expected = `${fileUri.fsPath}:6 functionId=createLogger anchorLine=4`;
+			await editAndWaitForLog(api, editor, new vscode.Position(5, 0), 'edit ', expected);
+
+			assert.ok(
+				!api.logger.lines.some((line) => line.includes('functionId=secondLevelVariable')),
+				`Unexpected nested functionId detected. Last 20 log entries:\n${api.logger.lines
+					.slice(-20)
+					.join('\n')}`,
+			);
+		} finally {
+			await fs.rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
 	test('supports test functions (describe/it)', async () => {
 		const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
 		assert.ok(extension, 'Extension not found');

@@ -173,34 +173,41 @@ const functionSymbolKinds = new Set<vscode.SymbolKind>([
 	vscode.SymbolKind.Constructor,
 ]);
 
+const blockSymbolKinds = new Set<vscode.SymbolKind>([
+	...functionSymbolKinds,
+	vscode.SymbolKind.Variable,
+]);
+
 const containerSymbolKinds = new Set<vscode.SymbolKind>([
 	vscode.SymbolKind.Class,
 	vscode.SymbolKind.Namespace,
 	vscode.SymbolKind.Module,
 	vscode.SymbolKind.Function,
+	vscode.SymbolKind.Variable,
 ]);
 
-const isFunctionSymbol = (symbol: vscode.DocumentSymbol, document: vscode.TextDocument): boolean => {
+/**
+ * Returns whether a DocumentSymbol should be treated as a "block" for LineHeat.
+ *
+ * Basic rules:
+ * - `Function|Method|Constructor` are always blocks.
+ * - `Variable` is a block only when it is not nested inside another block.
+ *
+ * This is intentionally language-agnostic: it uses only `SymbolKind` + nesting depth
+ * (no parsing or source-text heuristics).
+ */
+const isFunctionSymbol = (
+	symbol: vscode.DocumentSymbol,
+	ancestors: vscode.DocumentSymbol[] = [],
+): boolean => {
 	if (functionSymbolKinds.has(symbol.kind)) {
 		return true;
 	}
 	
 	if (symbol.kind === vscode.SymbolKind.Variable) {
-		const line = document.lineAt(symbol.selectionRange.start.line);
-		const text = line.text.trim();
-		
-		const isFunctionExpression = 
-			text.includes('=>') ||
-			text.includes('function') ||
-			text.includes('=') && text.includes('(');
-		
-		return isFunctionExpression;
-	}
-	
-	// Support test functions in JavaScript/TypeScript
-	if (symbol.kind === vscode.SymbolKind.Function) {
-		const name = symbol.name.toLowerCase();
-		return name.includes('describe') || name.includes('it(') || name.includes('test(') || name.includes('beforeeach') || name.includes('aftereach');
+		// Treat root/module/class-level variables as blocks, but avoid going deeper.
+		// This is language-agnostic and relies only on SymbolKind + nesting depth.
+		return !ancestors.some((ancestor) => blockSymbolKinds.has(ancestor.kind));
 	}
 	
 	return false;
@@ -429,6 +436,13 @@ const isDocumentSymbol = (
 	symbol: vscode.DocumentSymbol | vscode.SymbolInformation,
 ): symbol is vscode.DocumentSymbol => 'selectionRange' in symbol;
 
+/**
+ * Builds a stable function/block identifier string for a symbol.
+ *
+ * The ID is a slash-separated path of URI-escaped name segments.
+ * The container path includes only selected symbol kinds (classes/namespaces/modules
+ * and other blocks), so nested symbols become `Outer/Inner`.
+ */
 const buildFunctionId = (ancestors: vscode.DocumentSymbol[], symbol: vscode.DocumentSymbol) => {
 	const containerSegments = ancestors
 		.filter((ancestor) => containerSymbolKinds.has(ancestor.kind))
@@ -451,6 +465,13 @@ const convertToDocumentSymbol = (symbol: vscode.SymbolInformation): vscode.Docum
 	children: [],
 });
 
+/**
+ * Returns (and caches) DocumentSymbols for a document.
+ *
+ * We rely on VS Code's built-in document symbol providers (language-dependent).
+ * Results are cached per document version, with a debounce to avoid thrashing
+ * while the user is actively editing.
+ */
 const getDocumentSymbols = async (document: vscode.TextDocument, logger?: LineHeatLogger) => {
 	const cacheKey = document.uri.toString();
 	const cached = documentSymbolCache.get(cacheKey);
@@ -506,6 +527,15 @@ const getDocumentSymbols = async (document: vscode.TextDocument, logger?: LineHe
 	}
 };
 
+/**
+ * Resolves the most specific enclosing block at the given position.
+ *
+ * Selection rule:
+ * - choose the smallest enclosing symbol range that contains the position
+ * - tie-break by deeper nesting, then earlier document order
+ *
+ * Returns a functionId plus an anchorLine (1-based) used to disambiguate duplicates.
+ */
 const resolveFunctionInfoFromSymbols = (
 	symbols: vscode.DocumentSymbol[],
 	position: vscode.Position,
@@ -533,7 +563,7 @@ const resolveFunctionInfoFromSymbols = (
 		const currentOrder = order;
 		order += 1;
 		const nextAncestors = [...ancestors, symbol];
-		if (isFunctionSymbol(symbol, document) && symbol.range.contains(position)) {
+		if (isFunctionSymbol(symbol, ancestors) && symbol.range.contains(position)) {
 			const length = symbol.range.end.line - symbol.range.start.line;
 			const depth = ancestors.length;
 			const functionId = buildFunctionId(ancestors, symbol);
@@ -569,6 +599,13 @@ const resolveFunctionInfoFromSymbols = (
 	return { functionId: best.functionId, anchorLine: best.anchorLine };
 };
 
+/**
+ * Fallback "block" detection for test files (describe/it/test).
+ *
+ * This does a lightweight text scan to synthesize a stable functionId for the
+ * current test case, so edits/presence can still be attributed even when the
+ * language symbol provider doesn't expose nested test blocks.
+ */
 const resolveFunctionInfoFromTestBlocks = (
 	position: vscode.Position,
 	document: vscode.TextDocument,
@@ -617,6 +654,12 @@ const resolveFunctionInfoFromTestBlocks = (
 	return { functionId: segments.join('/'), anchorLine };
 };
 
+/**
+ * Resolves function/block info for a position.
+ *
+ * If the document looks like a test file and a test block can be determined,
+ * that takes precedence; otherwise fall back to symbol-based resolution.
+ */
 const resolveFunctionInfo = (
 	symbols: vscode.DocumentSymbol[],
 	position: vscode.Position,
@@ -630,10 +673,16 @@ const resolveFunctionInfo = (
 	return symbolInfo;
 };
 
-const buildDocumentFunctionIndex = (symbols: vscode.DocumentSymbol[], document: vscode.TextDocument) => {
+/**
+ * Builds an index of all blocks in a document keyed by functionId.
+ *
+ * Multiple entries can share the same functionId (e.g. duplicate symbol names);
+ * we use anchorLine proximity later to pick the best match for CodeLens.
+ */
+const buildDocumentFunctionIndex = (symbols: vscode.DocumentSymbol[]) => {
 	const index = new Map<string, FunctionSymbolEntry[]>();
 	const visit = (symbol: vscode.DocumentSymbol, ancestors: vscode.DocumentSymbol[]) => {
-		if (isFunctionSymbol(symbol, document)) {
+		if (isFunctionSymbol(symbol, ancestors)) {
 			const functionId = buildFunctionId(ancestors, symbol);
 			const entry = {
 				functionId,
@@ -662,7 +711,7 @@ const getDocumentFunctionIndex = async (document: vscode.TextDocument, logger?: 
 		return cached.index;
 	}
 	const symbols = await getDocumentSymbols(document, logger);
-	const index = buildDocumentFunctionIndex(symbols, document);
+	const index = buildDocumentFunctionIndex(symbols);
 	documentFunctionIndexCache.set(cacheKey, { version: document.version, index });
 	return index;
 };
