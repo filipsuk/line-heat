@@ -14,6 +14,11 @@
   "categories": [
     "Other"
   ],
+  "files": [
+    "out/extension.js",
+    "README.md",
+    "CHANGELOG.md"
+  ],
   "activationEvents": [
     "onStartupFinished"
   ],
@@ -65,11 +70,16 @@
   "scripts": {
     "build:protocol": "npm run build -w @line-heat/protocol",
     "bundle": "node ./esbuild.mjs",
-    "vscode:prepublish": "npm run compile",
-    "compile": "npm run build:protocol && tsc -p ./ && npm run bundle",
+    "bundle:production": "node ./esbuild.mjs --production",
+    "check-types": "tsc --noEmit -p ./",
+    "compile": "npm run build:protocol && npm run check-types && npm run bundle",
+    "compile-tests": "npm run build:protocol && tsc -p ./",
+    "package": "npm run build:protocol && npm run check-types && npm run bundle:production",
+    "vscode:prepublish": "npm run package",
     "vsix": "npm exec --yes @vscode/vsce package -- --no-dependencies",
-    "watch": "tsc -watch -p ./",
-    "pretest": "npm run compile && npm run lint",
+    "watch": "node ./esbuild.mjs --watch",
+    "watch:tsc": "tsc --noEmit --watch -p ./",
+    "pretest": "npm run compile-tests && npm run lint",
     "lint": "eslint src",
     "test": "vscode-test"
   },
