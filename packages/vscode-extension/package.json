@@ -67,6 +67,7 @@
     "bundle": "node ./esbuild.mjs",
     "vscode:prepublish": "npm run compile",
     "compile": "npm run build:protocol && tsc -p ./ && npm run bundle",
+    "vsix": "npm run compile && npm exec --yes @vscode/vsce package -- --no-dependencies",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
