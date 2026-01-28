@@ -226,7 +226,7 @@ suite('Line Heat Extension', function () {
 		}
 	});
 
-	test('does not show own presence in CodeLens', async () => {
+		test('does not show own presence in CodeLens', async () => {
 		const token = 'devtoken';
 		const editorConfig = vscode.workspace.getConfiguration('editor');
 		const config = vscode.workspace.getConfiguration('lineheat');
@@ -307,9 +307,177 @@ suite('Line Heat Extension', function () {
 			await config.update('emoji', '', vscode.ConfigurationTarget.Global);
 			await editorConfig.update('codeLens', undefined, vscode.ConfigurationTarget.Global);
 		}
-	});
+		});
 
-	test('joins expected room for opened file', async () => {
+		test('does not show own edits in CodeLens', async () => {
+			const token = 'devtoken';
+			const editorConfig = vscode.workspace.getConfiguration('editor');
+			const config = vscode.workspace.getConfiguration('lineheat');
+			await editorConfig.update('codeLens', true, vscode.ConfigurationTarget.Global);
+			await config.update('serverUrl', '', vscode.ConfigurationTarget.Global);
+			await config.update('token', '', vscode.ConfigurationTarget.Global);
+			await config.update('displayName', 'Me', vscode.ConfigurationTarget.Global);
+			await config.update('emoji', '😎', vscode.ConfigurationTarget.Global);
+
+			const mockServer = await startMockLineHeatServer({
+				token,
+				retentionDays: 7,
+				autoRoomSnapshot: ({ room, auth }) => {
+					const ownUserId = auth?.userId ?? 'unknown';
+					const now = Date.now();
+					const lastEditAt = now - 2 * 60 * 1000;
+					return {
+						repoId: room.repoId,
+						filePath: room.filePath,
+						functions: [
+							{
+								functionId: 'testFunction',
+								anchorLine: 1,
+								lastEditAt,
+								topEditors: [
+									{ userId: ownUserId, displayName: 'Me', emoji: '😎', lastEditAt },
+									{ userId: 'u2', displayName: 'Alice', emoji: '🦄', lastEditAt },
+								],
+							},
+						],
+						presence: [],
+					};
+				},
+			});
+
+			await config.update('serverUrl', mockServer.serverUrl, vscode.ConfigurationTarget.Global);
+			await config.update('token', token, vscode.ConfigurationTarget.Global);
+
+			const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+			assert.ok(extension, 'Extension not found');
+			await extension.activate();
+
+			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'line-heat-own-edits-'));
+			try {
+				await runGit(['init'], tempDir);
+				await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
+
+				const filePath = path.join(tempDir, 'edits.ts');
+				const fileUri = vscode.Uri.file(filePath);
+				await fs.writeFile(
+					filePath,
+					'function testFunction() {\n  const value = 42;\n  return value;\n}',
+					'utf8',
+				);
+
+				const doc = await vscode.workspace.openTextDocument(fileUri);
+				await vscode.window.showTextDocument(doc, { preview: false });
+
+				const expectedFilePath = path.relative(tempDir, filePath).split(path.sep).join('/');
+				await mockServer.waitForRoomJoin({
+					predicate: (room) => room.filePath === expectedFilePath,
+				});
+
+				await waitForAsync(async () => {
+					const result = await vscode.commands.executeCommand('vscode.executeCodeLensProvider', fileUri);
+					const lenses = result as vscode.CodeLens[];
+					const titles = lenses
+						.filter((lens) => lens.command?.command === 'lineheat.showHeatDetails')
+						.map((lens) => lens.command?.title)
+						.filter((title): title is string => Boolean(title));
+					const hasOther = titles.some((title) => title.includes('edit:') && title.includes('🦄 Alice'));
+					const hasSelf = titles.some((title) => title.includes('😎 Me'));
+					return hasOther && !hasSelf;
+				}, 8000);
+			} finally {
+				await fs.rm(tempDir, { recursive: true, force: true });
+				await mockServer.close();
+				await config.update('serverUrl', '', vscode.ConfigurationTarget.Global);
+				await config.update('token', '', vscode.ConfigurationTarget.Global);
+				await config.update('displayName', '', vscode.ConfigurationTarget.Global);
+				await config.update('emoji', '', vscode.ConfigurationTarget.Global);
+				await editorConfig.update('codeLens', undefined, vscode.ConfigurationTarget.Global);
+			}
+		});
+
+		test('does not show heat CodeLens when only editor is self', async () => {
+			const token = 'devtoken';
+			const editorConfig = vscode.workspace.getConfiguration('editor');
+			const config = vscode.workspace.getConfiguration('lineheat');
+			await editorConfig.update('codeLens', true, vscode.ConfigurationTarget.Global);
+			await config.update('serverUrl', '', vscode.ConfigurationTarget.Global);
+			await config.update('token', '', vscode.ConfigurationTarget.Global);
+			await config.update('displayName', 'Me', vscode.ConfigurationTarget.Global);
+			await config.update('emoji', '😎', vscode.ConfigurationTarget.Global);
+
+			const mockServer = await startMockLineHeatServer({
+				token,
+				retentionDays: 7,
+				autoRoomSnapshot: ({ room, auth }) => {
+					const ownUserId = auth?.userId ?? 'unknown';
+					const now = Date.now();
+					const lastEditAt = now - 2 * 60 * 1000;
+					return {
+						repoId: room.repoId,
+						filePath: room.filePath,
+						functions: [
+							{
+								functionId: 'testFunction',
+								anchorLine: 1,
+								lastEditAt,
+								topEditors: [
+									{ userId: ownUserId, displayName: 'Me', emoji: '😎', lastEditAt },
+								],
+							},
+						],
+						presence: [],
+					};
+				},
+			});
+
+			await config.update('serverUrl', mockServer.serverUrl, vscode.ConfigurationTarget.Global);
+			await config.update('token', token, vscode.ConfigurationTarget.Global);
+
+			const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+			assert.ok(extension, 'Extension not found');
+			await extension.activate();
+
+			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'line-heat-own-edits-only-self-'));
+			try {
+				await runGit(['init'], tempDir);
+				await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
+
+				const filePath = path.join(tempDir, 'edits-only-self.ts');
+				const fileUri = vscode.Uri.file(filePath);
+				await fs.writeFile(
+					filePath,
+					'function testFunction() {\n  const value = 42;\n  return value;\n}',
+					'utf8',
+				);
+
+				const doc = await vscode.workspace.openTextDocument(fileUri);
+				await vscode.window.showTextDocument(doc, { preview: false });
+
+				const expectedFilePath = path.relative(tempDir, filePath).split(path.sep).join('/');
+				await mockServer.waitForRoomJoin({
+					predicate: (room) => room.filePath === expectedFilePath,
+				});
+
+				await waitForAsync(async () => {
+					const result = await vscode.commands.executeCommand('vscode.executeCodeLensProvider', fileUri);
+					const lenses = result as vscode.CodeLens[];
+					const lineHeatLenses = lenses.filter(
+						(lens) => lens.command?.command === 'lineheat.showHeatDetails',
+					);
+					return lineHeatLenses.length === 0;
+				}, 8000);
+			} finally {
+				await fs.rm(tempDir, { recursive: true, force: true });
+				await mockServer.close();
+				await config.update('serverUrl', '', vscode.ConfigurationTarget.Global);
+				await config.update('token', '', vscode.ConfigurationTarget.Global);
+				await config.update('displayName', '', vscode.ConfigurationTarget.Global);
+				await config.update('emoji', '', vscode.ConfigurationTarget.Global);
+				await editorConfig.update('codeLens', undefined, vscode.ConfigurationTarget.Global);
+			}
+		});
+
+		test('joins expected room for opened file', async () => {
 		const token = 'devtoken';
 		const mockServer = await startMockLineHeatServer({ token, retentionDays: 7 });
 		const config = vscode.workspace.getConfiguration('lineheat');

@@ -366,7 +366,7 @@ class HeatCodeLensProvider implements vscode.CodeLensProvider {
 			let heatEmoji: string | undefined;
 			let heatAge: string | undefined;
 			const heatEditorsAll = (heat?.topEditors ?? [])
-				.filter((editorEntry) => decayMs > 0 && now - editorEntry.lastEditAt <= decayMs)
+				.filter((editorEntry) => decayMs > 0 && now - editorEntry.lastEditAt <= decayMs && editorEntry.userId !== userId)
 				.map(formatUserLabel);
 			const heatEditorsText = formatTopLabels(heatEditorsAll, 3);
 			if (heat && decayMs > 0 && heatEditorsText) {
