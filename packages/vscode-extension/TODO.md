@@ -1,0 +1,1 @@
+- [] Do not update the edit time "Xs ago" so often. Just when some new data comes from the server. Use "now" if less than a minute. Then update the time max 1 times a minute.

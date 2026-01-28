@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 
-import { startMockLineHeatServer } from './mockLineHeatServer';
+import { startMockLineHeatServer } from './support/mockLineHeatServer';
 
 import {
 	cdpCaptureScreenshotPng,
@@ -13,7 +13,7 @@ import {
 	sleep,
 	waitForAsync,
 	type ExtensionApi,
-} from './testUtils';
+} from './support/testUtils';
 
 suite('Line Heat Extension', function () {
 	this.timeout(10000);
