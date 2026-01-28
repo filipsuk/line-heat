@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 export type ExtensionApi = {
 	logger: {
 		lines: string[];
+		messages: string[];
 	};
 };
 

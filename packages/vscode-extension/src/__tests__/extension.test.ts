@@ -11,6 +11,7 @@ import {
 	editAndWaitForLog,
 	runGit,
 	sleep,
+	waitFor,
 	waitForAsync,
 	type ExtensionApi,
 } from './support/testUtils';
@@ -67,6 +68,8 @@ suite('Line Heat Extension', function () {
 		}
 	});
 
+
+
 	test('logs function identifiers for edits', async () => {
 		const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
 		assert.ok(extension, 'Extension not found');
@@ -115,7 +118,7 @@ suite('Line Heat Extension', function () {
 			const expectedMethod = `${fileUri.fsPath}:8 functionId=Alpha/Box/methodOne anchorLine=7`;
 			await editAndWaitForLog(api, editor, new vscode.Position(7, 0), 'edit ', expectedMethod);
 
-			const expectedInner = `${fileUri.fsPath}:15 functionId=Alpha/outer/inner anchorLine=14`;
+			const expectedInner = `${fileUri.fsPath}:15 functionId=Alpha/outer anchorLine=13`;
 			await editAndWaitForLog(api, editor, new vscode.Position(14, 0), 'edit ', expectedInner);
 
 			assert.ok(api?.logger.lines.includes(expectedMethod), `Missing log entry: ${expectedMethod}`);
@@ -174,9 +177,9 @@ suite('Line Heat Extension', function () {
 		}
 	});
 
-	test('does not treat nested const arrow functions as separate blocks', async () => {
-		const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
-		assert.ok(extension, 'Extension not found');
+		test('does not treat nested const arrow functions as separate blocks', async () => {
+			const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+			assert.ok(extension, 'Extension not found');
 
 		const api = await extension?.activate();
 		assert.ok(api?.logger, 'Extension did not return logger');
@@ -222,12 +225,12 @@ suite('Line Heat Extension', function () {
 					.slice(-20)
 					.join('\n')}`,
 			);
-		} finally {
-			await fs.rm(tempDir, { recursive: true, force: true });
-		}
-	});
+			} finally {
+				await fs.rm(tempDir, { recursive: true, force: true });
+			}
+		});
 
-	test('supports test functions (describe/it)', async () => {
+	test('attributes deep edits to the nearest level-2 block (top-level const arrow)', async () => {
 		const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
 		assert.ok(extension, 'Extension not found');
 
@@ -236,29 +239,29 @@ suite('Line Heat Extension', function () {
 
 		api?.logger.lines.splice(0, api.logger.lines.length);
 
-		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'line-heat-test-functions-'));
+		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'line-heat-inline-callback-'));
 		try {
 			await runGit(['init'], tempDir);
 			await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
 
-			const filePath = path.join(tempDir, 'test.spec.ts');
+			const filePath = path.join(tempDir, 'inline-callback.ts');
 			const fileUri = vscode.Uri.file(filePath);
 			await fs.writeFile(
 				filePath,
 				[
-					"describe('User authentication', () => {",
-					"  describe('login functionality', () => {",
-					"    it('should login with valid credentials', () => {",
-					"      const user = { username: 'test', password: 'pass' };",
-					"      expect(user.username).toBe('test');",
-					"    });",
-					"",
-					"    it('should reject invalid credentials', () => {",
-					"      const user = { username: 'wrong', password: 'wrong' };",
-					"      expect(user.username).toBe('wrong');",
-					"    });",
-					"  });",
-					"});",
+					'export const foo = () => {',
+					'  someFunc((x: number) => {',
+					'    function level3() {',
+					'      const z = 1;',
+					'      return z;',
+					'    }',
+					'    return level3() + x;',
+					'  });',
+					'};',
+					'',
+					'function someFunc(cb: (x: number) => number) {',
+					'  return cb(1);',
+					'}',
 				].join('\n'),
 				'utf8',
 			);
@@ -266,18 +269,190 @@ suite('Line Heat Extension', function () {
 			const doc = await vscode.workspace.openTextDocument(fileUri);
 			const editor = await vscode.window.showTextDocument(doc, { preview: false });
 
-			const expectedFirstTest = `${fileUri.fsPath}:4 functionId=User%20authentication/login%20functionality/should%20login%20with%20valid%20credentials anchorLine=3`;
-			await editAndWaitForLog(api, editor, new vscode.Position(3, 0), 'edit ', expectedFirstTest);
+			const expected = `${fileUri.fsPath}:4 functionId=foo anchorLine=1`;
+			await editAndWaitForLog(api, editor, new vscode.Position(3, 0), 'edit ', expected);
 
-			const expectedSecondTest = `${fileUri.fsPath}:8 functionId=User%20authentication/login%20functionality/should%20reject%20invalid%20credentials anchorLine=7`;
-			await editAndWaitForLog(api, editor, new vscode.Position(7, 0), 'edit ', expectedSecondTest);
-
-			assert.ok(api?.logger.lines.includes(expectedFirstTest), `Missing log entry: ${expectedFirstTest}`);
-			assert.ok(api?.logger.lines.includes(expectedSecondTest), `Missing log entry: ${expectedSecondTest}`);
+			assert.ok(api?.logger.lines.includes(expected), `Missing log entry: ${expected}`);
 		} finally {
 			await fs.rm(tempDir, { recursive: true, force: true });
 		}
 	});
+
+	test('attributes edits inside exported const arrow (empty body) to the const symbol', async () => {
+		const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+		assert.ok(extension, 'Extension not found');
+
+		const api = await extension?.activate();
+		assert.ok(api?.logger, 'Extension did not return logger');
+
+		api?.logger.lines.splice(0, api.logger.lines.length);
+
+		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'line-heat-exported-const-typed-'));
+		try {
+			await runGit(['init'], tempDir);
+			await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
+
+			const filePath = path.join(tempDir, 'exported-const-empty-body.ts');
+			const fileUri = vscode.Uri.file(filePath);
+			await fs.writeFile(
+				filePath,
+				[
+					'export const formatRelativeTime = (now: number, timestamp: number) => {',
+					'	// heat and presence should work here',
+					'};',
+					'',
+					'export const other = () => 1;',
+				].join('\n'),
+				'utf8',
+			);
+
+			const doc = await vscode.workspace.openTextDocument(fileUri);
+			const editor = await vscode.window.showTextDocument(doc, { preview: false });
+
+			const expected = `${fileUri.fsPath}:2 functionId=formatRelativeTime anchorLine=1`;
+			await editAndWaitForLog(api, editor, new vscode.Position(1, 1), 'edit ', expected);
+
+			assert.ok(api?.logger.lines.includes(expected), `Missing log entry: ${expected}`);
+		} finally {
+			await fs.rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	test('attributes deep edits to the nearest level-2 block (top-level function)', async () => {
+		const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+		assert.ok(extension, 'Extension not found');
+
+		const api = await extension?.activate();
+		assert.ok(api?.logger, 'Extension did not return logger');
+
+		api?.logger.lines.splice(0, api.logger.lines.length);
+
+		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'line-heat-deep-function-'));
+		try {
+			await runGit(['init'], tempDir);
+			await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
+
+			const filePath = path.join(tempDir, 'deep-function.ts');
+			const fileUri = vscode.Uri.file(filePath);
+			await fs.writeFile(
+				filePath,
+				[
+					'export function outer() {',
+					'  function level2() {',
+					'    function level3() {',
+					'      function level4() {',
+					'        return 1;',
+					'      }',
+					'      return level4();',
+					'    }',
+					'    return level3();',
+					'  }',
+					'  return level2();',
+					'}',
+				].join('\n'),
+				'utf8',
+			);
+
+			const doc = await vscode.workspace.openTextDocument(fileUri);
+			const editor = await vscode.window.showTextDocument(doc, { preview: false });
+
+			const expected = `${fileUri.fsPath}:5 functionId=outer anchorLine=1`;
+			await editAndWaitForLog(api, editor, new vscode.Position(4, 0), 'edit ', expected);
+
+			assert.ok(api?.logger.lines.includes(expected), `Missing log entry: ${expected}`);
+		} finally {
+			await fs.rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	test('attributes deep edits to the nearest level-2 block (class method)', async () => {
+		const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+		assert.ok(extension, 'Extension not found');
+
+		const api = await extension?.activate();
+		assert.ok(api?.logger, 'Extension did not return logger');
+
+		api?.logger.lines.splice(0, api.logger.lines.length);
+
+		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'line-heat-deep-class-method-'));
+		try {
+			await runGit(['init'], tempDir);
+			await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
+
+			const filePath = path.join(tempDir, 'deep-class.ts');
+			const fileUri = vscode.Uri.file(filePath);
+			await fs.writeFile(
+				filePath,
+				[
+					'export class Box {',
+					'  methodOne() {',
+					'    function level3() {',
+					'      function level4() {',
+					'        return 1;',
+					'      }',
+					'      return level4();',
+					'    }',
+					'    return level3();',
+					'  }',
+					'}',
+				].join('\n'),
+				'utf8',
+			);
+
+			const doc = await vscode.workspace.openTextDocument(fileUri);
+			const editor = await vscode.window.showTextDocument(doc, { preview: false });
+
+			const expected = `${fileUri.fsPath}:5 functionId=Box/methodOne anchorLine=2`;
+			await editAndWaitForLog(api, editor, new vscode.Position(4, 0), 'edit ', expected);
+
+			assert.ok(api?.logger.lines.includes(expected), `Missing log entry: ${expected}`);
+		} finally {
+			await fs.rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	test('attributes edits in class body to the class when no level-2 member applies', async () => {
+		const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+		assert.ok(extension, 'Extension not found');
+
+		const api = await extension?.activate();
+		assert.ok(api?.logger, 'Extension did not return logger');
+
+		api?.logger.lines.splice(0, api.logger.lines.length);
+
+		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'line-heat-class-body-'));
+		try {
+			await runGit(['init'], tempDir);
+			await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
+
+			const filePath = path.join(tempDir, 'class-body.ts');
+			const fileUri = vscode.Uri.file(filePath);
+			await fs.writeFile(
+				filePath,
+				[
+					'export class Box {',
+					'  private value = 1;',
+					'',
+					'  methodOne() {',
+					'    return this.value;',
+					'  }',
+					'}',
+				].join('\n'),
+				'utf8',
+			);
+
+			const doc = await vscode.workspace.openTextDocument(fileUri);
+			const editor = await vscode.window.showTextDocument(doc, { preview: false });
+
+			const expected = `${fileUri.fsPath}:2 functionId=Box anchorLine=1`;
+			await editAndWaitForLog(api, editor, new vscode.Position(1, 0), 'edit ', expected);
+
+			assert.ok(api?.logger.lines.includes(expected), `Missing log entry: ${expected}`);
+		} finally {
+			await fs.rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
 
 		test('does not show own presence in CodeLens', async () => {
 		const token = 'devtoken';
@@ -311,6 +486,90 @@ suite('Line Heat Extension', function () {
 					],
 				};
 			},
+		});
+
+		test('logs presence:set with a meaningful functionId (not %2F) for exported const arrow', async () => {
+			const token = 'devtoken';
+			const editorConfig = vscode.workspace.getConfiguration('editor');
+			const config = vscode.workspace.getConfiguration('lineheat');
+			await editorConfig.update('codeLens', true, vscode.ConfigurationTarget.Global);
+			await config.update('serverUrl', '', vscode.ConfigurationTarget.Global);
+			await config.update('token', '', vscode.ConfigurationTarget.Global);
+			await config.update('displayName', 'Me', vscode.ConfigurationTarget.Global);
+			await config.update('emoji', '😎', vscode.ConfigurationTarget.Global);
+			await config.update('logLevel', 'debug', vscode.ConfigurationTarget.Global);
+
+			const mockServer = await startMockLineHeatServer({ token, retentionDays: 7 });
+			await config.update('serverUrl', mockServer.serverUrl, vscode.ConfigurationTarget.Global);
+			await config.update('token', token, vscode.ConfigurationTarget.Global);
+
+			const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+			assert.ok(extension, 'Extension not found');
+			const api = await extension.activate();
+			assert.ok(api?.logger, 'Extension did not return logger');
+			api.logger.messages.splice(0, api.logger.messages.length);
+
+			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'line-heat-presence-functionid-'));
+			try {
+				await runGit(['init'], tempDir);
+				await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
+
+				const filePath = path.join(tempDir, 'someFunc.ts');
+				const fileUri = vscode.Uri.file(filePath);
+				await fs.writeFile(
+					filePath,
+					[
+						'export const someFunc = (intensity: number) => {',
+						"\tif (intensity >= 0.75) {",
+						"\t\treturn '🔥';",
+						"\t}",
+						"\tif (intensity >= 0.5) {",
+						"\t\treturn '🟠';",
+						"\t}",
+						"\tif (intensity >= 0.25) {",
+						"\t\treturn '🟡';",
+						"\t}",
+						"\treturn '🔵';",
+						'};',
+					].join('\n'),
+					'utf8',
+				);
+
+				const doc = await vscode.workspace.openTextDocument(fileUri);
+				const editor = await vscode.window.showTextDocument(doc, { preview: false });
+				await sleep(100);
+				api.logger.messages.splice(0, api.logger.messages.length);
+
+				const expectedFilePath = path.relative(tempDir, filePath).split(path.sep).join('/');
+				await mockServer.waitForRoomJoin({ predicate: (room) => room.filePath === expectedFilePath });
+
+				editor.selection = new vscode.Selection(new vscode.Position(5, 1), new vscode.Position(5, 1));
+				await waitFor(
+					() =>
+						api.logger.messages.some(
+							(m) => m.includes('lineheat: presence:desired:set') && m.includes('functionId=someFunc'),
+						),
+					8000,
+					`presence:desired:set not observed. Last 30 messages:\n${api.logger.messages
+						.slice(-30)
+						.join('\n')}`,
+				);
+				assert.ok(
+					!api.logger.messages.some((m) => m.includes('lineheat: presence:set') && m.includes('functionId=%2F')),
+					`Unexpected %2F functionId in presence:set. Last 30 messages:\n${api.logger.messages
+						.slice(-30)
+						.join('\n')}`,
+				);
+			} finally {
+				await fs.rm(tempDir, { recursive: true, force: true });
+				await mockServer.close();
+				await config.update('serverUrl', '', vscode.ConfigurationTarget.Global);
+				await config.update('token', '', vscode.ConfigurationTarget.Global);
+				await config.update('displayName', '', vscode.ConfigurationTarget.Global);
+				await config.update('emoji', '', vscode.ConfigurationTarget.Global);
+				await config.update('logLevel', undefined, vscode.ConfigurationTarget.Global);
+				await editorConfig.update('codeLens', undefined, vscode.ConfigurationTarget.Global);
+			}
 		});
 
 		await config.update('serverUrl', mockServer.serverUrl, vscode.ConfigurationTarget.Global);
@@ -347,7 +606,7 @@ suite('Line Heat Extension', function () {
 				const titles = lenses
 					.map((lens) => lens.command?.title)
 					.filter((title): title is string => Boolean(title));
-				const hasOther = titles.some((title) => title.includes('👀 live:') && title.includes('🦄 Alice'));
+				const hasOther = titles.some((title) => title.includes('live:') && title.includes('🦄 Alice'));
 				const hasSelf = titles.some((title) => title.includes('😎 Me'));
 				return hasOther && !hasSelf;
 			}, 8000);
@@ -695,7 +954,7 @@ suite('Line Heat Extension', function () {
 						(title) => title.includes('🟡') && title.includes(`${aliceEmoji} ${aliceName}`),
 					);
 					const hasPresence = titles.some(
-						(title) => title.includes('👀 live:') && title.includes(`${carolEmoji} ${carolName}`),
+						(title) => title.includes('live:') && title.includes(`${carolEmoji} ${carolName}`),
 					);
 					const hasGammaLine = lenses.some((lens) => lens.range.start.line === 8);
 					return hasHot && hasMild && hasPresence && !hasGammaLine;
@@ -790,7 +1049,7 @@ suite('Line Heat Extension', function () {
 					const lenses = result as vscode.CodeLens[];
 					return lenses.some((lens) => {
 						const title = lens.command?.title ?? '';
-						return title.includes('🔥') && title.includes('👀 live:');
+					return title.includes('🔥') && title.includes('live:');
 					});
 				}, 8000);
 

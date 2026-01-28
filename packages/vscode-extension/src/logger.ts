@@ -12,16 +12,20 @@ const logLevelWeight: Record<LogLevel, number> = {
 export const createLogger = (level: LogLevel): LineHeatLogger => {
 	const output = vscode.window.createOutputChannel('LineHeat', { log: true });
 	const lines: string[] = [];
+	const messages: string[] = [];
 	let currentLevel = level;
 
 	const log = (messageLevel: LogLevel, message: string) => {
+		const formatted = `lineheat (${messageLevel}): ${message}`;
+		messages.push(formatted);
 		if (logLevelWeight[messageLevel] <= logLevelWeight[currentLevel]) {
-			output.appendLine(`lineheat (${messageLevel}): ${message}`);
+			output.appendLine(formatted);
 		}
 	};
 
 	return {
 		output,
+		messages,
 		lines,
 		debug: (message) => log('debug', message),
 		info: (message) => log('info', message),
@@ -32,9 +36,7 @@ export const createLogger = (level: LogLevel): LineHeatLogger => {
 		},
 		logEdit: (entry) => {
 			lines.push(entry);
-			if (logLevelWeight.debug <= logLevelWeight[currentLevel]) {
-				output.appendLine(`lineheat (debug): ${entry}`);
-			}
+			log('debug', entry);
 		},
 	};
 };

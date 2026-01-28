@@ -66,6 +66,12 @@ export type LineHeatSettings = {
 
 export type LineHeatLogger = {
 	output: vscode.LogOutputChannel;
+	/**
+	 * In-memory copy of output messages (primarily for tests).
+	 *
+	 * Format matches the Output channel prefix, e.g. `lineheat (debug): ...`.
+	 */
+	messages: string[];
 	lines: string[];
 	debug: (message: string) => void;
 	info: (message: string) => void;

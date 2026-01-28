@@ -71,6 +71,24 @@ const isSamePresence = (left: PresenceState | undefined, right: PresenceState | 
 
 const getRoomKey = (room: RoomContext): RoomKey => `${room.repoId}:${room.filePath}`;
 
+const formatPresenceState = (presence: PresenceState | undefined) =>
+	presence
+		? `repoId=${presence.repoId} filePath=${presence.filePath} functionId=${presence.functionId} anchorLine=${presence.anchorLine}`
+		: 'none';
+
+const formatSymbolsSummary = (symbols: vscode.DocumentSymbol[], maxItems = 8) => {
+	const formatRange = (range: vscode.Range) =>
+		`${range.start.line + 1}:${range.start.character}-${range.end.line + 1}:${range.end.character}`;
+	const kindLabel = (kind: vscode.SymbolKind) => vscode.SymbolKind[kind] ?? String(kind);
+	return symbols
+		.slice(0, maxItems)
+		.map(
+			(symbol) =>
+				`${kindLabel(symbol.kind)} name=${JSON.stringify(symbol.name)} sel=${formatRange(symbol.selectionRange)} range=${formatRange(symbol.range)} children=${symbol.children.length}`,
+		)
+		.join(' | ');
+};
+
 const emitRoomJoin = (logger: LineHeatLogger, room: RoomContext) => {
 	if (!activeSocket?.connected || !protocolModule) {
 		return;
@@ -89,18 +107,24 @@ const emitRoomLeave = (logger: LineHeatLogger, room: RoomContext) => {
 
 const emitPresenceSet = (logger: LineHeatLogger, payload: PresenceState) => {
 	if (!activeSocket?.connected || !protocolModule) {
+		logger.debug(
+			`lineheat: presence:set:skip reason=socket-not-ready connected=${activeSocket?.connected ?? false} protocolLoaded=${Boolean(protocolModule)} ${formatPresenceState(payload)}`,
+		);
 		return;
 	}
 	activeSocket.emit(protocolModule.EVENT_PRESENCE_SET, payload);
-	logger.debug('lineheat: presence:set');
+	logger.debug(`lineheat: presence:set ${formatPresenceState(payload)}`);
 };
 
 const emitPresenceClear = (logger: LineHeatLogger, payload: RoomContext) => {
 	if (!activeSocket?.connected || !protocolModule) {
+		logger.debug(
+			`lineheat: presence:clear:skip reason=socket-not-ready connected=${activeSocket?.connected ?? false} protocolLoaded=${Boolean(protocolModule)} repoId=${payload.repoId} filePath=${payload.filePath}`,
+		);
 		return;
 	}
 	activeSocket.emit(protocolModule.EVENT_PRESENCE_CLEAR, payload);
-	logger.debug('lineheat: presence:clear');
+	logger.debug(`lineheat: presence:clear repoId=${payload.repoId} filePath=${payload.filePath}`);
 };
 
 const updateStatusBar = () => {
@@ -109,24 +133,24 @@ const updateStatusBar = () => {
 	}
 
 	if (!hasRequiredSettings(currentSettings)) {
-		statusBarItem.text = '🚫🔥';
+		statusBarItem.text = '$(circle-slash)';
 		statusBarItem.tooltip = 'LineHeat is disabled. Configure server URL and token.';
 		return;
 	}
 
 	if (activeRepoState.status === 'nogit') {
-		statusBarItem.text = '🚫🔥';
+		statusBarItem.text = '$(circle-slash)';
 		statusBarItem.tooltip = 'LineHeat is disabled (no git remote detected).';
 		return;
 	}
 
 	if (activeSocket?.connected) {
-		statusBarItem.text = '🔥';
+		statusBarItem.text = '$(flame)';
 		statusBarItem.tooltip = `LineHeat connected (retention ${retentionDays} days). Click to open settings.`;
 		return;
 	}
 
-	statusBarItem.text = '🚫🔥';
+	statusBarItem.text = '$(debug-disconnect)';
 	statusBarItem.tooltip = 'LineHeat is disconnected. Click to open settings.';
 };
 
@@ -359,6 +383,11 @@ const syncRoomsWithSocket = (logger: LineHeatLogger) => {
 		return;
 	}
 	const activeRoomKey = activeRoomContext ? getRoomKey(activeRoomContext) : undefined;
+	if (activeRoomKey && !desiredRooms.has(activeRoomKey)) {
+		logger.debug(
+			`lineheat: room:skip reason=active-room-not-in-desired activeRoomKey=${activeRoomKey} desiredRooms=${desiredRooms.size} joinedRooms=${joinedRooms.size}`,
+		);
+	}
 	const orderedRooms = mruRooms.filter((roomKey) => desiredRooms.has(roomKey));
 	const { limitedRooms, evictedRooms } = applyRoomLimit(orderedRooms, activeRoomKey);
 	const targetRooms = new Set(limitedRooms);
@@ -388,10 +417,21 @@ const syncRoomsWithSocket = (logger: LineHeatLogger) => {
 
 const syncPresenceWithSocket = (logger: LineHeatLogger) => {
 	if (!activeSocket?.connected || !protocolModule) {
+	if (desiredPresence || activePresence) {
+		logger.debug(
+			`lineheat: presence:skip reason=socket-not-ready connected=${activeSocket?.connected ?? false} protocolLoaded=${Boolean(protocolModule)} desired=${formatPresenceState(desiredPresence)} active=${formatPresenceState(activePresence)}`,
+		);
+	}
 		return;
 	}
 	const activeRoomKey = activeRoomContext ? getRoomKey(activeRoomContext) : undefined;
 	const isActiveRoomJoined = activeRoomKey ? joinedRooms.has(activeRoomKey) : false;
+	if (desiredPresence && !isActiveRoomJoined) {
+		const activeRoomDesired = activeRoomKey ? desiredRooms.has(activeRoomKey) : false;
+		logger.debug(
+			`lineheat: presence:skip reason=room-not-joined activeRoomKey=${activeRoomKey ?? 'none'} activeRoomDesired=${activeRoomDesired} desiredRooms=${desiredRooms.size} joinedRooms=${joinedRooms.size} desired=${formatPresenceState(desiredPresence)}`,
+		);
+	}
 	if (activePresence && (!desiredPresence || !isSamePresence(activePresence, desiredPresence))) {
 		emitPresenceClear(logger, {
 			repoId: activePresence.repoId,
@@ -406,26 +446,53 @@ const syncPresenceWithSocket = (logger: LineHeatLogger) => {
 };
 
 const updateDesiredPresenceFromEditor = async (editor: vscode.TextEditor | undefined, logger?: LineHeatLogger) => {
-	if (!editor || editor.document.uri.scheme !== 'file') {
+	const previous = desiredPresence;
+	const clearDesired = (reason: string) => {
+		if (previous && logger) {
+			logger.debug(`lineheat: presence:desired:clear reason=${reason} previous=${formatPresenceState(previous)}`);
+		}
 		desiredPresence = undefined;
+	};
+
+	if (!editor || editor.document.uri.scheme !== 'file') {
+		clearDesired('no-editor-or-non-file');
 		return;
 	}
 	if (!activeRoomContext) {
-		desiredPresence = undefined;
+		clearDesired('no-active-room');
 		return;
 	}
 	const symbols = await getDocumentSymbols(editor.document, logger);
-	const functionInfo = resolveFunctionInfo(symbols, editor.selection.active, editor.document, logger);
+	const position = editor.selection.active;
+	const functionInfo = resolveFunctionInfo(symbols, position, editor.document, logger);
+	if (logger) {
+		const suspicious =
+			!functionInfo ||
+			functionInfo.functionId === '%2F' ||
+			functionInfo.functionId.startsWith('%2F/') ||
+			functionInfo.functionId.endsWith('/%2F');
+		if (suspicious) {
+			logger.debug(
+				`lineheat: symbols:suspicious uri=${editor.document.uri.fsPath} position=${position.line + 1}:${position.character} symbols=${symbols.length} top=[${formatSymbolsSummary(symbols)}]`,
+			);
+		}
+	}
 	if (!functionInfo) {
-		desiredPresence = undefined;
+		clearDesired(`no-function position=${position.line + 1}:${position.character}`);
 		return;
 	}
-	desiredPresence = {
+	const next: PresenceState = {
 		repoId: activeRoomContext.repoId,
 		filePath: activeRoomContext.filePath,
 		functionId: functionInfo.functionId,
 		anchorLine: functionInfo.anchorLine,
 	};
+	if (!isSamePresence(previous, next) && logger) {
+		logger.debug(
+			`lineheat: presence:desired:set position=${position.line + 1}:${position.character} symbols=${symbols.length} ${formatPresenceState(next)}`,
+		);
+	}
+	desiredPresence = next;
 };
 
 const updateOpenRoomsFromTabs = async (logger: LineHeatLogger) => {
@@ -493,6 +560,11 @@ const updateActiveEditorState = async (
 	const previousRoom = activeRoomContext;
 	await refreshActiveRepoState(logger, editor);
 	if (!isSameRoom(previousRoom, activeRoomContext)) {
+		if (desiredPresence) {
+			logger.debug(
+				`lineheat: presence:desired:clear reason=active-room-changed previous=${formatPresenceState(desiredPresence)}`,
+			);
+		}
 		desiredPresence = undefined;
 	}
 	syncPresenceWithSocket(logger);
@@ -559,10 +631,11 @@ export function activate(context: vscode.ExtensionContext) {
 	activeLogger = logger;
 	currentSettings = settings;
 	statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-	statusBarItem.text = '🚫🔥';
+	statusBarItem.text = '$(debug-disconnect)';
 	statusBarItem.tooltip = 'LineHeat';
 	statusBarItem.command = { command: 'workbench.action.openSettings', arguments: ['lineheat'], title: 'Open LineHeat settings'};
 	statusBarItem.show();
+	updateStatusBar();
 
 	heatCodeLensProvider = new HeatCodeLensProvider({
 		getLogger: () => activeLogger,
@@ -682,11 +755,11 @@ export function activate(context: vscode.ExtensionContext) {
 		onTabDisposable,
 		onSelectionDisposable,
 	);
-	return { logger: { lines: logger.lines } };
+	return { logger: { lines: logger.lines, messages: logger.messages } };
 }
 
-export function getLoggerForTests(): { lines: string[] } | undefined {
-	return activeLogger ? { lines: activeLogger.lines } : undefined;
+export function getLoggerForTests(): { lines: string[]; messages: string[] } | undefined {
+	return activeLogger ? { lines: activeLogger.lines, messages: activeLogger.messages } : undefined;
 }
 
 
