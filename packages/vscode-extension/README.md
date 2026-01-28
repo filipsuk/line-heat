@@ -35,8 +35,7 @@ Run the extension in an Extension Development Host:
 To package a `.vsix` (optional):
 
 ```bash
-cd packages/vscode-extension
-npm exec --yes @vscode/vsce package -- --no-dependencies
+npm run vsix -w vscode-extension
 ```
 
 Then install it in VS Code via "Extensions: Install from VSIX...".
