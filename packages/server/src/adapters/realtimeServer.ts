@@ -54,6 +54,7 @@ type SocketUser = {
 type PendingDelta = {
   repoId: string;
   filePath: string;
+  hashVersion?: string;
   heat: Map<string, HeatUpdate>;
   presence: Map<string, PresenceUpdate>;
   timer: NodeJS.Timeout | null;
@@ -87,18 +88,22 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
     roomKey: string,
     repoId: string,
     filePath: string,
-    updates: FileDeltaPayload["updates"]
+    updates: FileDeltaPayload["updates"],
+    hashVersion?: string
   ): void => {
     let pending = pendingDeltas.get(roomKey);
     if (!pending) {
       pending = {
         repoId,
         filePath,
+        hashVersion,
         heat: new Map(),
         presence: new Map(),
         timer: null,
       };
       pendingDeltas.set(roomKey, pending);
+    } else if (hashVersion && !pending.hashVersion) {
+      pending.hashVersion = hashVersion;
     }
 
     if (updates.heat) {
@@ -125,6 +130,7 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
           : undefined;
         if (heat || presence) {
           io.to(roomKey).emit(EVENT_FILE_DELTA, {
+            ...(next.hashVersion ? { hashVersion: next.hashVersion } : {}),
             repoId: next.repoId,
             filePath: next.filePath,
             updates: {
@@ -331,7 +337,9 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
         }
 
         const roomState = heatState.get(roomKey);
+        const hashVersion = (payload as { hashVersion?: string }).hashVersion;
         socket.emit(EVENT_ROOM_SNAPSHOT, {
+          ...(hashVersion ? { hashVersion } : {}),
           repoId: payload.repoId,
           filePath: payload.filePath,
           functions: roomState ? Array.from(roomState.functions.values()) : [],
@@ -361,7 +369,7 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
       if (presenceUpdate) {
         queueDelta(roomKey, payload.repoId, payload.filePath, {
           presence: presenceUpdate.updates,
-        });
+        }, (payload as { hashVersion?: string }).hashVersion);
       }
     });
 
@@ -402,7 +410,7 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
       if (heatFunction) {
         queueDelta(roomKey, payload.repoId, payload.filePath, {
           heat: [heatFunction],
-        });
+        }, (payload as { hashVersion?: string }).hashVersion);
       }
     });
 
@@ -437,7 +445,7 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
       if (update) {
         queueDelta(roomKey, payload.repoId, payload.filePath, {
           presence: update.updates,
-        });
+        }, (payload as { hashVersion?: string }).hashVersion);
       }
     });
 
@@ -459,7 +467,7 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
       if (update) {
         queueDelta(roomKey, payload.repoId, payload.filePath, {
           presence: update.updates,
-        });
+        }, (payload as { hashVersion?: string }).hashVersion);
       }
     });
 
@@ -473,7 +481,7 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
         const roomKey = getRoomKey(update.repoId, update.filePath);
         queueDelta(roomKey, update.repoId, update.filePath, {
           presence: update.updates,
-        });
+        }, HASH_HEX_RE.test(update.repoId) && HASH_HEX_RE.test(update.filePath) ? HASH_VERSION : undefined);
       }
     });
   });
@@ -485,7 +493,7 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
       const roomKey = getRoomKey(update.repoId, update.filePath);
       queueDelta(roomKey, update.repoId, update.filePath, {
         presence: update.updates,
-      });
+      }, HASH_HEX_RE.test(update.repoId) && HASH_HEX_RE.test(update.filePath) ? HASH_VERSION : undefined);
     }
   }, PRESENCE_CLEANUP_MS);
 

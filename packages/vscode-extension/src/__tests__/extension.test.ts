@@ -853,13 +853,109 @@ suite('Line Heat Extension', function () {
 		}
 	});
 
-	suite('Heat CodeLens', function () {
-		this.timeout(30000);
+		suite('Heat CodeLens', function () {
+			this.timeout(30000);
 
-		test('provides heat CodeLens with emoji, age, and top editors', async () => {
-			const token = 'devtoken';
-			const editorConfig = vscode.workspace.getConfiguration('editor');
-			const config = vscode.workspace.getConfiguration('lineheat');
+			test('shows other user presence from file:delta', async () => {
+				const token = 'devtoken';
+				const editorConfig = vscode.workspace.getConfiguration('editor');
+				const config = vscode.workspace.getConfiguration('lineheat');
+				await editorConfig.update('codeLens', true, vscode.ConfigurationTarget.Global);
+
+				const aliceEmoji = '🦄';
+				const aliceName = 'Alice';
+
+				const mockServer = await startMockLineHeatServer({
+					token,
+					retentionDays: 7,
+					autoRoomSnapshot: ({ room }) => ({
+						hashVersion: HASH_VERSION,
+						repoId: room.repoId,
+						filePath: room.filePath,
+						functions: [],
+						presence: [],
+					}),
+				});
+
+				await config.update('serverUrl', mockServer.serverUrl, vscode.ConfigurationTarget.Global);
+				await config.update('token', token, vscode.ConfigurationTarget.Global);
+
+				const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+				assert.ok(extension, 'Extension not found');
+				await extension.activate();
+
+				const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'line-heat-presence-delta-'));
+				try {
+					await runGit(['init'], tempDir);
+					await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
+
+					const filePath = path.join(tempDir, 'presence.ts');
+					const fileUri = vscode.Uri.file(filePath);
+					await fs.writeFile(
+						filePath,
+						[
+							'function alpha() {',
+							'  return 1;',
+							'}',
+						].join('\n'),
+						'utf8',
+					);
+
+					const doc = await vscode.workspace.openTextDocument(fileUri);
+					await vscode.window.showTextDocument(doc, { preview: false });
+
+					const expectedFilePath = path.relative(tempDir, filePath).split(path.sep).join('/');
+					const expectedFilePathHash = sha256Hex(expectedFilePath);
+					const joinedRoom = await mockServer.waitForRoomJoin({
+						predicate: (room) => room.filePath === expectedFilePathHash,
+					});
+
+					const now = Date.now();
+					mockServer.emitFileDelta({
+						hashVersion: HASH_VERSION,
+						repoId: joinedRoom.repoId,
+						filePath: joinedRoom.filePath,
+						updates: {
+							presence: [
+								{
+									functionId: sha256Hex('alpha'),
+									anchorLine: 1,
+									users: [
+										{
+											userId: 'u2',
+											displayName: aliceName,
+											emoji: aliceEmoji,
+											lastSeenAt: now,
+										},
+									],
+								},
+							],
+						},
+					});
+
+					await waitForAsync(async () => {
+						const result = await vscode.commands.executeCommand('vscode.executeCodeLensProvider', fileUri);
+						const lenses = result as vscode.CodeLens[];
+						const titles = lenses
+							.map((lens) => lens.command?.title)
+							.filter((title): title is string => Boolean(title));
+						return titles.some(
+							(title) => title.includes('live:') && title.includes(`${aliceEmoji} ${aliceName}`),
+						);
+					}, 8000);
+				} finally {
+					await fs.rm(tempDir, { recursive: true, force: true });
+					await mockServer.close();
+					await config.update('serverUrl', '', vscode.ConfigurationTarget.Global);
+					await config.update('token', '', vscode.ConfigurationTarget.Global);
+					await editorConfig.update('codeLens', undefined, vscode.ConfigurationTarget.Global);
+				}
+			});
+
+			test('provides heat CodeLens with emoji, age, and top editors', async () => {
+				const token = 'devtoken';
+				const editorConfig = vscode.workspace.getConfiguration('editor');
+				const config = vscode.workspace.getConfiguration('lineheat');
 			await editorConfig.update('codeLens', true, vscode.ConfigurationTarget.Global);
 
 			const aliceEmoji = '🦄';
@@ -1059,7 +1155,9 @@ suite('Line Heat Extension', function () {
 					const heatLens = lenses.find(
 						(lens) => lens.command?.command === 'lineheat.showHeatDetails',
 					);
-					assert.ok(heatLens, 'Expected to find heat CodeLens');
+					if (!heatLens) {
+						return false;
+					}
 					
 					const title = heatLens.command?.title ?? '';
 					// Should show the non-self age (30 minutes ago), not self age (2 minutes ago)

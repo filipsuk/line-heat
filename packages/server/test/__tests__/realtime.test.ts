@@ -10,12 +10,13 @@ import {
   EVENT_PRESENCE_CLEAR,
   EVENT_PRESENCE_SET,
   EVENT_ROOM_JOIN,
+  EVENT_ROOM_SNAPSHOT,
   EVENT_SERVER_INCOMPATIBLE,
   HASH_VERSION,
   PROTOCOL_VERSION,
   sha256Hex,
 } from "@line-heat/protocol";
-import type { FileDeltaPayload, RoomJoinAck } from "@line-heat/protocol";
+import type { FileDeltaPayload, RoomJoinAck, RoomSnapshotPayload } from "@line-heat/protocol";
 
 import { SqliteEventStore } from "../../src/adapters/sqliteEventStore.js";
 import { createHeatState } from "../../src/domain/heatState.js";
@@ -94,6 +95,32 @@ const waitForDelta = (
     };
 
     client.on(EVENT_FILE_DELTA, handler);
+  });
+
+const waitForSnapshot = (
+  client: ReturnType<typeof createClient>,
+  predicate: (payload: RoomSnapshotPayload) => boolean,
+  timeoutMs = 1000
+): Promise<RoomSnapshotPayload> =>
+  new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error("Timed out waiting for room:snapshot"));
+    }, timeoutMs);
+
+    const handler = (payload: RoomSnapshotPayload) => {
+      if (predicate(payload)) {
+        cleanup();
+        resolve(payload);
+      }
+    };
+
+    const cleanup = () => {
+      clearTimeout(timeout);
+      client.off(EVENT_ROOM_SNAPSHOT, handler);
+    };
+
+    client.on(EVENT_ROOM_SNAPSHOT, handler);
   });
 
 describe("realtime socket server", () => {
@@ -184,6 +211,12 @@ describe("realtime socket server", () => {
     const filePath = sha256Hex("file");
     const functionId = sha256Hex("fn");
 
+    const snapshotPromise = waitForSnapshot(
+      clientA,
+      (payload) => payload.repoId === repoId && payload.filePath === filePath,
+      1000
+    );
+
     await new Promise<void>((resolve, reject) => {
       clientA.emit(
         EVENT_ROOM_JOIN,
@@ -192,6 +225,8 @@ describe("realtime socket server", () => {
           ack.ok ? resolve() : reject(new Error(ack.error))
       );
     });
+    const snapshot = await snapshotPromise;
+    expect(snapshot.hashVersion).toBe(HASH_VERSION);
     await new Promise<void>((resolve, reject) => {
       clientB.emit(
         EVENT_ROOM_JOIN,
@@ -219,6 +254,7 @@ describe("realtime socket server", () => {
     });
 
     const delta = await deltaPromise;
+    expect(delta.hashVersion).toBe(HASH_VERSION);
     expect(delta.repoId).toBe(repoId);
     expect(delta.filePath).toBe(filePath);
     expect(delta.updates.heat?.some((heat) => heat.functionId === functionId)).toBe(
