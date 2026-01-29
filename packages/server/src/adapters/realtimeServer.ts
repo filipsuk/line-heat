@@ -54,7 +54,7 @@ type SocketUser = {
 type PendingDelta = {
   repoId: string;
   filePath: string;
-  hashVersion?: string;
+  hashVersion: string;
   heat: Map<string, HeatUpdate>;
   presence: Map<string, PresenceUpdate>;
   timer: NodeJS.Timeout | null;
@@ -89,7 +89,7 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
     repoId: string,
     filePath: string,
     updates: FileDeltaPayload["updates"],
-    hashVersion?: string
+    hashVersion: string
   ): void => {
     let pending = pendingDeltas.get(roomKey);
     if (!pending) {
@@ -102,7 +102,7 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
         timer: null,
       };
       pendingDeltas.set(roomKey, pending);
-    } else if (hashVersion && !pending.hashVersion) {
+    } else if (hashVersion !== pending.hashVersion) {
       pending.hashVersion = hashVersion;
     }
 
@@ -130,7 +130,7 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
           : undefined;
         if (heat || presence) {
           io.to(roomKey).emit(EVENT_FILE_DELTA, {
-            ...(next.hashVersion ? { hashVersion: next.hashVersion } : {}),
+            hashVersion: next.hashVersion,
             repoId: next.repoId,
             filePath: next.filePath,
             updates: {
@@ -157,9 +157,12 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
     if (!payload || typeof payload !== "object") {
       return "payload is required";
     }
-    const hashVersion = (payload as { hashVersion?: string }).hashVersion;
-    const hasHashVersion = hashVersion !== undefined;
-    if (hasHashVersion && hashVersion !== HASH_VERSION) {
+    const hashVersion =
+      typeof payload.hashVersion === "string" ? payload.hashVersion.trim() : "";
+    if (!hashVersion) {
+      return "hashVersion is required";
+    }
+    if (hashVersion !== HASH_VERSION) {
       return "hashVersion must match HASH_VERSION";
     }
     if (typeof payload.repoId !== "string" || payload.repoId.trim().length === 0) {
@@ -175,16 +178,11 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
     if (filePath.length > FILE_PATH_MAX_LENGTH) {
       return "filePath is too long";
     }
-    if (hasHashVersion) {
-      if (!HASH_HEX_RE.test(payload.repoId.trim())) {
-        return "repoId must be sha256 hex";
-      }
-      if (!HASH_HEX_RE.test(filePath)) {
-        return "filePath must be sha256 hex";
-      }
+    if (!HASH_HEX_RE.test(payload.repoId.trim())) {
+      return "repoId must be sha256 hex";
     }
-    if (!hasHashVersion && (filePath.startsWith("/") || filePath.includes(".."))) {
-      return "filePath must be git-root relative";
+    if (!HASH_HEX_RE.test(filePath)) {
+      return "filePath must be sha256 hex";
     }
     return null;
   };
@@ -197,8 +195,7 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
     if (typeof payload.functionId !== "string" || payload.functionId.length === 0) {
       return "functionId is required";
     }
-    const hashVersion = (payload as { hashVersion?: string }).hashVersion;
-    if (hashVersion !== undefined && !HASH_HEX_RE.test(payload.functionId)) {
+    if (!HASH_HEX_RE.test(payload.functionId)) {
       return "functionId must be sha256 hex";
     }
     if (!Number.isInteger(payload.anchorLine) || payload.anchorLine <= 0) {
@@ -337,9 +334,8 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
         }
 
         const roomState = heatState.get(roomKey);
-        const hashVersion = (payload as { hashVersion?: string }).hashVersion;
         socket.emit(EVENT_ROOM_SNAPSHOT, {
-          ...(hashVersion ? { hashVersion } : {}),
+          hashVersion: payload.hashVersion,
           repoId: payload.repoId,
           filePath: payload.filePath,
           functions: roomState ? Array.from(roomState.functions.values()) : [],
@@ -369,7 +365,7 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
       if (presenceUpdate) {
         queueDelta(roomKey, payload.repoId, payload.filePath, {
           presence: presenceUpdate.updates,
-        }, (payload as { hashVersion?: string }).hashVersion);
+        }, payload.hashVersion);
       }
     });
 
@@ -410,7 +406,7 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
       if (heatFunction) {
         queueDelta(roomKey, payload.repoId, payload.filePath, {
           heat: [heatFunction],
-        }, (payload as { hashVersion?: string }).hashVersion);
+        }, payload.hashVersion);
       }
     });
 
@@ -445,7 +441,7 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
       if (update) {
         queueDelta(roomKey, payload.repoId, payload.filePath, {
           presence: update.updates,
-        }, (payload as { hashVersion?: string }).hashVersion);
+        }, payload.hashVersion);
       }
     });
 
@@ -467,7 +463,7 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
       if (update) {
         queueDelta(roomKey, payload.repoId, payload.filePath, {
           presence: update.updates,
-        }, (payload as { hashVersion?: string }).hashVersion);
+        }, payload.hashVersion);
       }
     });
 
@@ -481,7 +477,7 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
         const roomKey = getRoomKey(update.repoId, update.filePath);
         queueDelta(roomKey, update.repoId, update.filePath, {
           presence: update.updates,
-        }, HASH_HEX_RE.test(update.repoId) && HASH_HEX_RE.test(update.filePath) ? HASH_VERSION : undefined);
+        }, HASH_VERSION);
       }
     });
   });
@@ -493,7 +489,7 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
       const roomKey = getRoomKey(update.repoId, update.filePath);
       queueDelta(roomKey, update.repoId, update.filePath, {
         presence: update.updates,
-      }, HASH_HEX_RE.test(update.repoId) && HASH_HEX_RE.test(update.filePath) ? HASH_VERSION : undefined);
+      }, HASH_VERSION);
     }
   }, PRESENCE_CLEANUP_MS);
 

@@ -158,10 +158,13 @@ describe("realtime socket server", () => {
       emoji: "✨",
     });
 
+    const repoId = sha256Hex("repo-1");
+    const filePath = sha256Hex("src/index.ts");
+
     await new Promise<void>((resolve, reject) => {
       clientA.emit(
         EVENT_ROOM_JOIN,
-        { repoId: "repo-1", filePath: "src/index.ts" },
+        { repoId, filePath, hashVersion: HASH_VERSION },
         (ack: RoomJoinAck) =>
           ack.ok ? resolve() : reject(new Error(ack.error))
       );
@@ -169,7 +172,7 @@ describe("realtime socket server", () => {
     await new Promise<void>((resolve, reject) => {
       clientB.emit(
         EVENT_ROOM_JOIN,
-        { repoId: "repo-1", filePath: "src/index.ts" },
+        { repoId, filePath, hashVersion: HASH_VERSION },
         (ack: RoomJoinAck) =>
           ack.ok ? resolve() : reject(new Error(ack.error))
       );
@@ -177,13 +180,14 @@ describe("realtime socket server", () => {
 
     const deltaPromise = waitForDelta(
       clientB,
-      (payload) => payload.repoId === "repo-1" && payload.filePath === "src/index.ts"
+      (payload) => payload.repoId === repoId && payload.filePath === filePath
     );
 
     clientA.emit(EVENT_PRESENCE_SET, {
-      repoId: "repo-1",
-      filePath: "src/index.ts",
-      functionId: "main",
+      hashVersion: HASH_VERSION,
+      repoId,
+      filePath,
+      functionId: sha256Hex("main"),
       anchorLine: 12,
     });
 
@@ -278,10 +282,14 @@ describe("realtime socket server", () => {
       emoji: "✨",
     });
 
+    const repoId = sha256Hex("repo-1");
+    const filePathA = sha256Hex("src/index.ts");
+    const filePathB = sha256Hex("src/other.ts");
+
     await new Promise<void>((resolve, reject) => {
       clientA.emit(
         EVENT_ROOM_JOIN,
-        { repoId: "repo-1", filePath: "src/index.ts" },
+        { repoId, filePath: filePathA, hashVersion: HASH_VERSION },
         (ack: RoomJoinAck) =>
           ack.ok ? resolve() : reject(new Error(ack.error))
       );
@@ -289,7 +297,7 @@ describe("realtime socket server", () => {
     await new Promise<void>((resolve, reject) => {
       clientB.emit(
         EVENT_ROOM_JOIN,
-        { repoId: "repo-1", filePath: "src/other.ts" },
+        { repoId, filePath: filePathB, hashVersion: HASH_VERSION },
         (ack: RoomJoinAck) =>
           ack.ok ? resolve() : reject(new Error(ack.error))
       );
@@ -304,9 +312,10 @@ describe("realtime socket server", () => {
     });
 
     clientA.emit(EVENT_PRESENCE_SET, {
-      repoId: "repo-1",
-      filePath: "src/index.ts",
-      functionId: "main",
+      hashVersion: HASH_VERSION,
+      repoId,
+      filePath: filePathA,
+      functionId: sha256Hex("main"),
       anchorLine: 12,
     });
 
@@ -328,10 +337,14 @@ describe("realtime socket server", () => {
       emoji: "✨",
     });
 
+    const repoId = sha256Hex("repo-1");
+    const filePath = sha256Hex("src/index.ts");
+    const functionId = sha256Hex("main");
+
     await new Promise<void>((resolve, reject) => {
       clientA.emit(
         EVENT_ROOM_JOIN,
-        { repoId: "repo-1", filePath: "src/index.ts" },
+        { repoId, filePath, hashVersion: HASH_VERSION },
         (ack: RoomJoinAck) =>
           ack.ok ? resolve() : reject(new Error(ack.error))
       );
@@ -339,16 +352,17 @@ describe("realtime socket server", () => {
     await new Promise<void>((resolve, reject) => {
       clientB.emit(
         EVENT_ROOM_JOIN,
-        { repoId: "repo-1", filePath: "src/index.ts" },
+        { repoId, filePath, hashVersion: HASH_VERSION },
         (ack: RoomJoinAck) =>
           ack.ok ? resolve() : reject(new Error(ack.error))
       );
     });
 
     clientA.emit(EVENT_PRESENCE_SET, {
-      repoId: "repo-1",
-      filePath: "src/index.ts",
-      functionId: "main",
+      hashVersion: HASH_VERSION,
+      repoId,
+      filePath,
+      functionId,
       anchorLine: 12,
     });
 
@@ -362,14 +376,15 @@ describe("realtime socket server", () => {
       (payload) =>
         payload.updates.presence?.some(
           (entry) =>
-            entry.functionId === "main" &&
+            entry.functionId === functionId &&
             entry.users.every((user) => user.userId !== "user-a")
         ) ?? false
     );
 
     clientA.emit(EVENT_PRESENCE_CLEAR, {
-      repoId: "repo-1",
-      filePath: "src/index.ts",
+      hashVersion: HASH_VERSION,
+      repoId,
+      filePath,
     });
 
     await cleared;
@@ -390,10 +405,14 @@ describe("realtime socket server", () => {
       emoji: "✨",
     });
 
+    const repoId = sha256Hex("repo-1");
+    const filePath = sha256Hex("src/index.ts");
+    const functionId = sha256Hex("main");
+
     await new Promise<void>((resolve, reject) => {
       clientA.emit(
         EVENT_ROOM_JOIN,
-        { repoId: "repo-1", filePath: "src/index.ts" },
+        { repoId, filePath, hashVersion: HASH_VERSION },
         (ack: RoomJoinAck) =>
           ack.ok ? resolve() : reject(new Error(ack.error))
       );
@@ -401,7 +420,7 @@ describe("realtime socket server", () => {
     await new Promise<void>((resolve, reject) => {
       clientB.emit(
         EVENT_ROOM_JOIN,
-        { repoId: "repo-1", filePath: "src/index.ts" },
+        { repoId, filePath, hashVersion: HASH_VERSION },
         (ack: RoomJoinAck) =>
           ack.ok ? resolve() : reject(new Error(ack.error))
       );
@@ -410,29 +429,31 @@ describe("realtime socket server", () => {
     const deltaPromise = waitForDelta(
       clientB,
       (payload) =>
-        payload.repoId === "repo-1" &&
-        payload.filePath === "src/index.ts" &&
-        payload.updates.heat?.some((heat) => heat.functionId === "main") === true
+        payload.repoId === repoId &&
+        payload.filePath === filePath &&
+        payload.updates.heat?.some((heat) => heat.functionId === functionId) === true
     );
 
     clientA.emit(EVENT_EDIT_PUSH, {
-      repoId: "repo-1",
-      filePath: "src/index.ts",
-      functionId: "main",
+      hashVersion: HASH_VERSION,
+      repoId,
+      filePath,
+      functionId,
       anchorLine: 12,
     });
 
     const delta = await deltaPromise;
-    
-    expect(delta.repoId).toBe("repo-1");
-    expect(delta.filePath).toBe("src/index.ts");
+
+    expect(delta.hashVersion).toBe(HASH_VERSION);
+    expect(delta.repoId).toBe(repoId);
+    expect(delta.filePath).toBe(filePath);
     expect(delta.updates.heat).toBeDefined();
     expect(Array.isArray(delta.updates.heat)).toBe(true);
     expect(delta.updates.heat?.length).toBeGreaterThan(0);
 
-    const heatUpdate = delta.updates.heat?.find((h) => h.functionId === "main");
+    const heatUpdate = delta.updates.heat?.find((h) => h.functionId === functionId);
     expect(heatUpdate).toBeDefined();
-    expect(heatUpdate?.functionId).toBe("main");
+    expect(heatUpdate?.functionId).toBe(functionId);
     expect(heatUpdate?.anchorLine).toBe(12);
     expect(heatUpdate?.lastEditAt).toBeTypeOf("number");
     expect(Array.isArray(heatUpdate?.topEditors)).toBe(true);
@@ -451,7 +472,7 @@ describe("realtime socket server", () => {
   it("disconnects client with incompatible protocol version", async () => {
     serverHandle = await startServer();
     const client = connectClient(serverHandle.port, { 
-      clientProtocolVersion: "2.0.0"
+      clientProtocolVersion: "1.0.0"
     });
 
     const incompatibleEvent = await new Promise<any>((resolve) => {

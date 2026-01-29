@@ -1,5 +1,7 @@
-export const PROTOCOL_VERSION = "1.0.0" as const;
-export const MIN_CLIENT_PROTOCOL_VERSION = "1.0.0" as const;
+import type { HashVersion } from "./hash.js";
+
+export const PROTOCOL_VERSION = "2.0.0" as const;
+export const MIN_CLIENT_PROTOCOL_VERSION = "2.0.0" as const;
 
 export const PRESENCE_TTL_SECONDS = 15 as const;
 export const DEFAULT_RETENTION_DAYS = 7 as const;
@@ -27,10 +29,10 @@ export type HandshakeAuthPayload = {
 
 export type RoomJoinPayload = {
   /**
-   * When present, repoId/filePath/functionId must be SHA-256 hex (64 lowercase),
-   * and hashVersion should match HASH_VERSION (sha256-hex-v1).
+   * Required. repoId/filePath/functionId must be SHA-256 hex (64 lowercase),
+   * and hashVersion must match HASH_VERSION (sha256-hex-v1).
    */
-  hashVersion?: string;
+  hashVersion: HashVersion;
   repoId: string;
   filePath: string;
 };
@@ -46,20 +48,20 @@ export type RoomJoinAck =
 
 export type RoomLeavePayload = {
   /**
-   * When present, repoId/filePath/functionId must be SHA-256 hex (64 lowercase),
-   * and hashVersion should match HASH_VERSION (sha256-hex-v1).
+   * Required. repoId/filePath/functionId must be SHA-256 hex (64 lowercase),
+   * and hashVersion must match HASH_VERSION (sha256-hex-v1).
    */
-  hashVersion?: string;
+  hashVersion: HashVersion;
   repoId: string;
   filePath: string;
 };
 
 export type EditPushPayload = {
   /**
-   * When present, repoId/filePath/functionId must be SHA-256 hex (64 lowercase),
-   * and hashVersion should match HASH_VERSION (sha256-hex-v1).
+   * Required. repoId/filePath/functionId must be SHA-256 hex (64 lowercase),
+   * and hashVersion must match HASH_VERSION (sha256-hex-v1).
    */
-  hashVersion?: string;
+  hashVersion: HashVersion;
   repoId: string;
   filePath: string;
   functionId: string;
@@ -68,10 +70,10 @@ export type EditPushPayload = {
 
 export type PresenceSetPayload = {
   /**
-   * When present, repoId/filePath/functionId must be SHA-256 hex (64 lowercase),
-   * and hashVersion should match HASH_VERSION (sha256-hex-v1).
+   * Required. repoId/filePath/functionId must be SHA-256 hex (64 lowercase),
+   * and hashVersion must match HASH_VERSION (sha256-hex-v1).
    */
-  hashVersion?: string;
+  hashVersion: HashVersion;
   repoId: string;
   filePath: string;
   functionId: string;
@@ -80,10 +82,10 @@ export type PresenceSetPayload = {
 
 export type PresenceClearPayload = {
   /**
-   * When present, repoId/filePath/functionId must be SHA-256 hex (64 lowercase),
-   * and hashVersion should match HASH_VERSION (sha256-hex-v1).
+   * Required. repoId/filePath/functionId must be SHA-256 hex (64 lowercase),
+   * and hashVersion must match HASH_VERSION (sha256-hex-v1).
    */
-  hashVersion?: string;
+  hashVersion: HashVersion;
   repoId: string;
   filePath: string;
 };
@@ -129,10 +131,10 @@ export type PresenceFunction = {
 
 export type RoomSnapshotPayload = {
   /**
-   * When present, repoId/filePath/functionId must be SHA-256 hex (64 lowercase),
-   * and hashVersion should match HASH_VERSION (sha256-hex-v1).
+   * Required. repoId/filePath/functionId must be SHA-256 hex (64 lowercase),
+   * and hashVersion must match HASH_VERSION (sha256-hex-v1).
    */
-  hashVersion?: string;
+  hashVersion: HashVersion;
   repoId: string;
   filePath: string;
   functions: HeatFunction[];
@@ -141,10 +143,10 @@ export type RoomSnapshotPayload = {
 
 export type FileDeltaPayload = {
   /**
-   * When present, repoId/filePath/functionId must be SHA-256 hex (64 lowercase),
-   * and hashVersion should match HASH_VERSION (sha256-hex-v1).
+   * Required. repoId/filePath/functionId must be SHA-256 hex (64 lowercase),
+   * and hashVersion must match HASH_VERSION (sha256-hex-v1).
    */
-  hashVersion?: string;
+  hashVersion: HashVersion;
   repoId: string;
   filePath: string;
   updates: {
@@ -154,3 +156,4 @@ export type FileDeltaPayload = {
 };
 
 export { HASH_VERSION, sha256Hex } from "./hash.js";
+export type { HashVersion } from "./hash.js";

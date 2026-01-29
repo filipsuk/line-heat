@@ -16,7 +16,7 @@ export type PresenceEntry = {
 };
 
 export type FileDeltaPayload = {
-	hashVersion?: string;
+	hashVersion: string;
 	repoId: string;
 	filePath: string;
 	updates: {
@@ -26,7 +26,7 @@ export type FileDeltaPayload = {
 };
 
 export type RoomSnapshotPayload = {
-	hashVersion?: string;
+	hashVersion: string;
 	repoId: string;
 	filePath: string;
 	functions: HeatEntry[];

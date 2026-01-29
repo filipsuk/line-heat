@@ -76,7 +76,7 @@ Room key:
 
 ## Identifier Hashing (`hashVersion`)
 
-To reduce sensitive metadata exposure, clients may send hashed identifiers instead of path-like values.
+To reduce sensitive metadata exposure, clients send hashed identifiers instead of path-like values.
 
 - Hashed identifiers: `repoId`, `filePath`, `functionId`
 - Signaling: include `hashVersion` in payloads
@@ -89,23 +89,13 @@ When `hashVersion=sha256-hex-v1`:
 
 Hashes are unsalted + deterministic (stable across sessions) which means common paths/names may be guessable.
 
-### `filePath` Rules (Git-Root Relative, plaintext mode)
+### Identifier Hashing (Required)
 
-`filePath` MUST be:
+This server operates in **hashed-identifier mode only**.
 
-- git-root-relative
-- `/` separators (normalize `\\` -> `/`)
-- non-empty
-- max 512 chars
-- MUST NOT start with `../`
-
-For a given file:
-
-1. Find git root: `git rev-parse --show-toplevel`.
-2. Compute `filePath = relativePath(gitRoot, file)`.
-3. Normalize separators and validate.
-
-If the file is not in a git repo (or git commands fail): do not subscribe and do not emit.
+- `hashVersion` is required on all room/edit/presence events.
+- `repoId`, `filePath`, `functionId` are **SHA-256 hex** (64 lowercase hex chars).
+- The server never needs (and does not expect) plaintext repo names, paths, or symbol names.
 
 ## Socket.IO Events (Names + Payload Shapes)
 
@@ -115,11 +105,11 @@ All payloads are JSON, camelCase.
 
 | Event | Payload | Ack / Notes |
 | --- | --- | --- |
-| `room:join` | `{ repoId: string, filePath: string, hashVersion?: string }` | Ack: `{ ok: true } \| { ok: false, error: string }` |
-| `room:leave` | `{ repoId: string, filePath: string, hashVersion?: string }` | no ack |
-| `edit:push` | `{ repoId: string, filePath: string, functionId: string, anchorLine: number, hashVersion?: string }` | server assigns `serverTs` and persists an event |
-| `presence:set` | `{ repoId: string, filePath: string, functionId: string, anchorLine: number, hashVersion?: string }` | meaning: active cursor is inside this function |
-| `presence:clear` | `{ repoId: string, filePath: string, hashVersion?: string }` | meaning: active cursor not inside any function in this file OR editor lost focus |
+| `room:join` | `{ hashVersion: "sha256-hex-v1", repoId: string, filePath: string }` | Ack: `{ ok: true } \| { ok: false, error: string }` |
+| `room:leave` | `{ hashVersion: "sha256-hex-v1", repoId: string, filePath: string }` | no ack |
+| `edit:push` | `{ hashVersion: "sha256-hex-v1", repoId: string, filePath: string, functionId: string, anchorLine: number }` | server assigns `serverTs` and persists an event |
+| `presence:set` | `{ hashVersion: "sha256-hex-v1", repoId: string, filePath: string, functionId: string, anchorLine: number }` | meaning: active cursor is inside this function |
+| `presence:clear` | `{ hashVersion: "sha256-hex-v1", repoId: string, filePath: string }` | meaning: active cursor not inside any function in this file OR editor lost focus |
 
 ### Server -> Client
 
@@ -127,8 +117,8 @@ All payloads are JSON, camelCase.
 | --- | --- | --- |
 | `server:hello` | `{ serverProtocolVersion, minClientProtocolVersion, serverRetentionDays }` | emitted once on successful connect |
 | `server:incompatible` | `{ serverProtocolVersion, minClientProtocolVersion, message }` | emitted before disconnect |
-| `room:snapshot` | `{ repoId, filePath, functions: Array<{ functionId, anchorLine: number, lastEditAt: number, topEditors: Array<{ userId, displayName, emoji, lastEditAt: number }> }>, presence: Array<{ functionId, anchorLine: number, users: Array<{ userId, displayName, emoji, lastSeenAt: number }> }> }` | emitted after successful `room:join` |
-| `file:delta` | `{ repoId, filePath, updates: { heat?: Array<{ functionId, anchorLine: number, lastEditAt: number, topEditors: Array<{ userId, displayName, emoji, lastEditAt: number }> }>, presence?: Array<{ functionId, anchorLine: number, users: Array<{ userId, displayName, emoji, lastSeenAt: number }> }> } }` | emitted after edits/presence changes; coalesced |
+| `room:snapshot` | `{ hashVersion: "sha256-hex-v1", repoId, filePath, functions: Array<{ functionId, anchorLine: number, lastEditAt: number, topEditors: Array<{ userId, displayName, emoji, lastEditAt: number }> }>, presence: Array<{ functionId, anchorLine: number, users: Array<{ userId, displayName, emoji, lastSeenAt: number }> }> }` | emitted after successful `room:join` |
+| `file:delta` | `{ hashVersion: "sha256-hex-v1", repoId, filePath, updates: { heat?: Array<{ functionId, anchorLine: number, lastEditAt: number, topEditors: Array<{ userId, displayName, emoji, lastEditAt: number }> }>, presence?: Array<{ functionId, anchorLine: number, users: Array<{ userId, displayName, emoji, lastSeenAt: number }> }> } }` | emitted after edits/presence changes; coalesced |
 
 `room:snapshot` server-provided semantics:
 
@@ -157,11 +147,8 @@ Time authority:
 
 - General: never throw on bad input; validate and ignore/reject.
 - Handshake validation (reject connection if invalid): token, `clientProtocolVersion`, `userId`, `displayName`, `emoji`.
-- `room:join`: validation branches on `hashVersion`:
-  - if `hashVersion === "sha256-hex-v1"`: validate `repoId`/`filePath` as 64-char lowercase hex; on failure ack `{ ok: false, error: "..." }` and do not join.
-  - if `hashVersion` is missing: validate `repoId`/`filePath` as plaintext (non-empty, <=512 chars, no `..`, no leading `/`).
-  - if `hashVersion` is present but not supported: ack `{ ok: false, error: "..." }` and do not join.
-- `edit:push` / `presence:set` / `presence:clear`: if payload invalid OR socket is not currently joined to the room: ignore and log at debug level. Validation branches on `hashVersion` the same way as `room:join`.
+- `room:join`: requires `hashVersion === "sha256-hex-v1"` and validates `repoId`/`filePath` as 64-char lowercase hex; on failure ack `{ ok: false, error: "..." }` and do not join.
+- `edit:push` / `presence:set` / `presence:clear`: if payload invalid OR socket is not currently joined to the room: ignore and log at debug level.
 
 ## `repoId` Normalization Algorithm
 

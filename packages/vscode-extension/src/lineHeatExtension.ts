@@ -628,9 +628,9 @@ const ensurePresenceKeepalive = (logger: LineHeatLogger) => {
 
 const updateRoomStateFromSnapshot = (payload: RoomSnapshotPayload) => {
 	const payloadKey = `${payload.repoId}:${payload.filePath}`;
-	const roomKey = payload.hashVersion && payload.hashVersion === protocolModule?.HASH_VERSION
+	const roomKey = payload.hashVersion === protocolModule?.HASH_VERSION
 		? roomKeyByHashedKey.get(payloadKey)
-		: getRoomKey({ repoId: payload.repoId, filePath: payload.filePath });
+		: undefined;
 	if (!roomKey) {
 		return;
 	}
@@ -649,9 +649,9 @@ const updateRoomStateFromSnapshot = (payload: RoomSnapshotPayload) => {
 
 const updateRoomStateFromDelta = (payload: FileDeltaPayload) => {
 	const payloadKey = `${payload.repoId}:${payload.filePath}`;
-	const roomKey = payload.hashVersion && payload.hashVersion === protocolModule?.HASH_VERSION
+	const roomKey = payload.hashVersion === protocolModule?.HASH_VERSION
 		? roomKeyByHashedKey.get(payloadKey)
-		: getRoomKey({ repoId: payload.repoId, filePath: payload.filePath });
+		: undefined;
 	if (!roomKey) {
 		return;
 	}
