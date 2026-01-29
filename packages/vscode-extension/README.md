@@ -40,9 +40,9 @@ LineHeat sits in between: asynchronous, ambient, low-friction. It provides aware
 3. **Configure the extension** in VS Code settings:
    - `lineheat.serverUrl` (required) - your LineHeat server URL
    - `lineheat.token` (required) - shared team token (must match server `LINEHEAT_TOKEN`)
-   - `lineheat.displayName` (optional) - shown to teammates (default: `${env:USER}`)
+   - `lineheat.displayName` (optional) - shown to teammates (default: OS username)
    - `lineheat.emoji` (optional) - shown next to your name (default: 🙂)
-   - `lineheat.heatDecayHours` (optional) - hours before heat fully decays (default: `24`)
+   - `lineheat.heatDecayHours` (optional) - hours before heat fully decays (default: `72`)
    - `lineheat.logLevel` (optional) - `error|warn|info|debug` (default: `info`)
 
 When connected, the status bar shows the server retention (example: `LineHeat: 7d`).
@@ -73,4 +73,4 @@ APIs, behavior, and UI are expected to change.
 
 ## License
 
-TBD (likely permissive open-source license).
+MIT
