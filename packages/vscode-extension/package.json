@@ -41,7 +41,7 @@
         },
         "lineheat.displayName": {
           "type": "string",
-          "default": "${env:USER}",
+          "default": "",
           "description": "Display name shared with teammates."
         },
         "lineheat.emoji": {
@@ -51,7 +51,7 @@
         },
         "lineheat.heatDecayHours": {
           "type": "number",
-          "default": 24,
+          "default": 72,
           "minimum": 1,
           "description": "Hours before heat fully decays."
         },
