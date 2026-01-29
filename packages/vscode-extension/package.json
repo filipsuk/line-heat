@@ -1,9 +1,11 @@
 {
   "name": "vscode-extension",
   "displayName": "Line Heat",
-  "description": "LineHeat MVP: log edited line locations",
+  "description": "Visualize live code activity with a decaying heatmap overlay",
   "version": "0.0.1",
   "publisher": "lineheat",
+  "icon": "icon.png",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/filipsuk/line-heat.git"
@@ -12,7 +14,7 @@
     "vscode": "^1.105.1"
   },
   "categories": [
-    "Other"
+    "Visualization"
   ],
   "files": [
     "out/extension.js",

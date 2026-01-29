@@ -1,84 +1,76 @@
-# LineHeat (VS Code Extension)
+# LineHeat
 
-LineHeat overlays a decaying heatmap on code based on recent teammate activity (MVP).
+**LineHeat** visualizes **live code activity** across your team by overlaying a heatmap directly on source lines.
 
-## Try It In VS Code
+It answers a simple question in real time:
 
-Prereqs:
-- Node.js + npm
-- VS Code
+> *"Is someone else working here right now?"*
 
-From repo root:
+Unlike Git history, pull requests, or blame views, LineHeat focuses on **what is happening now**, not what already happened.
 
-```bash
-npm install --no-package-lock
-```
+## What LineHeat Shows
 
-Start the server (optional but recommended for testing the realtime features):
+- Live activity intensity on individual **parts of code**
+- Recent edits by teammates, cooling over time
+- File-level and line-level hotspots
+- Passive awareness without requiring a shared editing session
 
-```bash
-export LINEHEAT_TOKEN=devtoken
-npm run dev -w @line-heat/server
-```
+LineHeat is **not** collaborative editing. It does not move your cursor, sync your view, or force pair programming.
 
-Run the extension in an Extension Development Host:
+## Why Use LineHeat
 
-1) Open `packages/vscode-extension` in VS Code
-2) Run `npm run compile` (or use the default build task)
-3) Press `F5` to launch the Extension Development Host
-4) In the Extension Development Host settings, set:
-   - `lineheat.serverUrl = http://localhost:8787`
-   - `lineheat.token = devtoken`
-   - `lineheat.displayName = Your Name`
-   - `lineheat.emoji = 🙂`
+Modern teams work in parallel, often unknowingly touching the same areas of code.
 
-To package a `.vsix` (optional):
+Current tools fall into two extremes:
+- **Git-based tools** → historical, too late
+- **Live co-editing** → intrusive, synchronous
 
-```bash
-npm run vsix -w vscode-extension
-```
+LineHeat sits in between: asynchronous, ambient, low-friction. It provides awareness without coordination overhead.
 
-Then install it in VS Code via "Extensions: Install from VSIX...".
-
-Note: The extension bundles its runtime dependencies into `out/extension.js`, so the VSIX stays small and doesn't pull in the whole workspace.
+**Use cases:**
+- Avoiding overlapping work and accidental conflicts
+- Understanding active ownership in large codebases
+- Supporting "loosely coupled" parallel development
+- Reducing redundant effort during refactors
 
 ## Configuration
 
-Settings live under the `lineheat.*` namespace:
-
-- `lineheat.serverUrl` (required) - LineHeat server URL (e.g. `http://localhost:8787`)
-- `lineheat.token` (required) - shared team token (must match server `LINEHEAT_TOKEN`)
-- `lineheat.displayName` (optional) - shown to teammates (default: `${env:USER}`)
-- `lineheat.emoji` (optional) - shown next to your name (default: `U+1F642`)
-- `lineheat.heatDecayHours` (optional) - hours before heat fully decays (default: `24`)
-- `lineheat.logLevel` (optional) - `error|warn|info|debug` (default: `info`)
+1. **Install the extension** from the VS Code Marketplace
+2. **Deploy the LineHeat server** (see [server documentation](https://github.com/filipsuk/line-heat))
+3. **Configure the extension** in VS Code settings:
+   - `lineheat.serverUrl` (required) - your LineHeat server URL
+   - `lineheat.token` (required) - shared team token (must match server `LINEHEAT_TOKEN`)
+   - `lineheat.displayName` (optional) - shown to teammates (default: `${env:USER}`)
+   - `lineheat.emoji` (optional) - shown next to your name (default: 🙂)
+   - `lineheat.heatDecayHours` (optional) - hours before heat fully decays (default: `24`)
+   - `lineheat.logLevel` (optional) - `error|warn|info|debug` (default: `info`)
 
 When connected, the status bar shows the server retention (example: `LineHeat: 7d`).
 
 ## Privacy
 
-- No source code, keystrokes, or file contents are transmitted.
-- `repoId`, `filePath`, and `functionId` are sent/stored as SHA-256 hashes (64-char lowercase hex). Raw filenames/paths and symbol names do not leave your machine.
-- Hashes are unsalted + deterministic (stable across sessions) which means common paths/names may be guessable.
-- Non-anonymity note: `userId` + `displayName` + `emoji` are shared to teammates in the same file room.
+LineHeat is **not a surveillance tool**.
 
-## Logs / Debugging
+- **No source code, keystrokes, or file contents are transmitted**
+- `repoId`, `filePath`, and `functionId` are sent/stored as SHA-256 hashes (64-char lowercase hex). Raw filenames/paths and symbol names do not leave your machine
+- Hashes are unsalted + deterministic (stable across sessions) which means common paths/names may be guessable
+- **Non-anonymity note:** `userId` + `displayName` + `emoji` are shared to teammates in the same file room (i.e. teammates who also have the same file open)
+- Retention defaults to 7 days (configurable on server)
+- No tracking of time, productivity, or individuals
 
-- Open the Output panel and select the `LineHeat` log channel.
-- Set `lineheat.logLevel` to `debug` for verbose protocol + room join/leave logs.
+If you are not looking at a file, LineHeat shows you nothing about it.
 
-## Development Folders
+## Troubleshooting
 
-- `.vscode/` holds launch/tasks/settings for developing this extension.
-- `.vscode-test/` is created by the test runner and can be deleted anytime.
-- `out/` contains compiled JavaScript output from TypeScript builds.
+- Open the **Output panel** and select the **LineHeat** log channel
+- Set `lineheat.logLevel` to `debug` for verbose protocol + room join/leave logs
 
-## Test Screenshots (CDP)
+## Status
 
-VS Code extension tests run inside an Electron-hosted workbench. VS Code does not expose a public screenshot API to extensions/tests, so the test suite captures screenshots by enabling Chromium remote debugging and using CDP (`Page.captureScreenshot`).
+🚧 **Early development / experimental**
 
-- Run: `npm test -w vscode-extension`
-- Output: `packages/vscode-extension/.vscode-test-artifacts/screenshots/heat-codelens.png` (overwritten each run)
-- Env vars:
-  - `VSCODE_REMOTE_DEBUGGING_PORT` (default `9222`)
-  - `VSCODE_TEST_ARTIFACTS` (default `packages/vscode-extension/.vscode-test-artifacts`)
+APIs, behavior, and UI are expected to change.
+
+## License
+
+TBD (likely permissive open-source license).
