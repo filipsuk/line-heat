@@ -1,10 +1,6 @@
 import * as vscode from 'vscode';
 
 import { encodeSymbolName } from './format';
-import {
-	isJavaScriptLikeDocument,
-	resolveJavaScriptTestBlockFunctionInfo,
-} from './langs/javascript/testBlocks';
 import { type FunctionInfo, type FunctionSymbolEntry, type LineHeatLogger } from './types';
 
 const documentSymbolCache = new Map<string, { version: number; symbols: vscode.DocumentSymbol[] }>();
@@ -112,16 +108,6 @@ const containerSymbolKinds = new Set<vscode.SymbolKind>([
 	vscode.SymbolKind.Variable,
 ]);
 
-const isMeaningfulSymbolName = (name: string) => {
-	const trimmed = name.trim();
-	if (!trimmed) {
-		return false;
-	}
-	// Some providers can return spurious symbols with name "/" which causes functionId "%2F".
-	// These don't represent a meaningful code block and should never be used for presence/heat.
-	return trimmed !== '/';
-};
-
 /**
  * Builds a stable function/block identifier string for a symbol.
  *
@@ -131,7 +117,7 @@ const isMeaningfulSymbolName = (name: string) => {
  */
 const buildFunctionId = (ancestors: vscode.DocumentSymbol[], symbol: vscode.DocumentSymbol) => {
 	const containerSegments = ancestors
-		.filter((ancestor) => containerSymbolKinds.has(ancestor.kind) && isMeaningfulSymbolName(ancestor.name))
+		.filter((ancestor) => containerSymbolKinds.has(ancestor.kind))
 		.map((ancestor) => encodeSymbolName(ancestor.name));
 	const functionName = encodeSymbolName(symbol.name);
 	return containerSegments.length > 0
@@ -340,7 +326,6 @@ const resolveFunctionInfoFromSymbols = (
 		order += 1;
 		const isMember = isActivityMemberSymbol(symbol, ancestors, hasMemberAncestor);
 		const isContainer = isActivityContainerSymbol(symbol);
-		const hasMeaningfulName = isMeaningfulSymbolName(symbol.name);
 		const nextAncestors = [...ancestors, symbol];
 		const nextHasMemberAncestor = hasMemberAncestor || isMember;
 
@@ -357,7 +342,7 @@ const resolveFunctionInfoFromSymbols = (
 			length = endLineExclusive - symbol.selectionRange.start.line;
 		}
 
-		if ((isMember || isContainer) && hasMeaningfulName && containsPosition) {
+		if ((isMember || isContainer) && containsPosition) {
 			const depth = ancestors.length;
 			const functionId = buildFunctionId(ancestors, symbol);
 			const anchorLine = symbol.selectionRange.start.line + 1;
@@ -381,9 +366,8 @@ const resolveFunctionInfoFromSymbols = (
 /**
  * Resolves function/block info for a position.
  *
- * Priority order:
- * 1) Language-agnostic symbol resolution.
- * 2) Language-specific fallbacks (last resort).
+ * Uses VS Code's symbol provider to find the enclosing function/block.
+ * Supports nested callback structures (e.g., suite->test) up to depth 2.
  */
 export const resolveFunctionInfo = (
 	symbols: vscode.DocumentSymbol[],
@@ -391,17 +375,7 @@ export const resolveFunctionInfo = (
 	document: vscode.TextDocument,
 	logger?: LineHeatLogger,
 ): FunctionInfo | null => {
-	const symbolInfo = resolveFunctionInfoFromSymbols(symbols, position, document, logger);
-	if (symbolInfo && symbolInfo.functionId !== '%2F') {
-		return symbolInfo;
-	}
-	if (isJavaScriptLikeDocument(document)) {
-		const testInfo = resolveJavaScriptTestBlockFunctionInfo(position, document);
-		if (testInfo) {
-			return testInfo;
-		}
-	}
-	return symbolInfo;
+	return resolveFunctionInfoFromSymbols(symbols, position, document, logger);
 };
 
 /**
@@ -419,7 +393,7 @@ const buildDocumentFunctionIndex = (symbols: vscode.DocumentSymbol[]) => {
 	) => {
 		const isMember = isActivityMemberSymbol(symbol, ancestors, hasMemberAncestor);
 		const isContainer = isActivityContainerSymbol(symbol);
-		if ((isContainer || isMember) && isMeaningfulSymbolName(symbol.name)) {
+		if (isContainer || isMember) {
 			const functionId = buildFunctionId(ancestors, symbol);
 			const entry = {
 				functionId,

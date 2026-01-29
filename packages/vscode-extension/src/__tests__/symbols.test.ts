@@ -92,46 +92,4 @@ suite('symbols (core)', function () {
 		}
 	});
 
-	test('prefers meaningful enclosing variable over test-block false positives', async () => {
-		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'line-heat-symbols-priority-'));
-		try {
-			const filePath = path.join(tempDir, 'sample.ts');
-			const fileUri = vscode.Uri.file(filePath);
-			await fs.writeFile(
-				filePath,
-				[
-					"export const getHeatEmojiFromIntensity = (intensity: number) => {",
-					"  const parts = 'a/b'.split('/');",
-					"  if (intensity >= 0.75) return '🔥';",
-					"  return parts.join(',');",
-					"};",
-					"export const other = () => 1;",
-				].join('\n'),
-				'utf8',
-			);
-
-			const doc = await vscode.workspace.openTextDocument(fileUri);
-			const symbols: vscode.DocumentSymbol[] = [
-				new vscode.DocumentSymbol(
-					'getHeatEmojiFromIntensity',
-					'',
-					vscode.SymbolKind.Variable,
-					new vscode.Range(new vscode.Position(0, 13), new vscode.Position(4, 2)),
-					new vscode.Range(new vscode.Position(0, 13), new vscode.Position(0, 38)),
-				),
-				new vscode.DocumentSymbol(
-					'/',
-					'',
-					vscode.SymbolKind.Variable,
-					new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 0)),
-					new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 0)),
-				),
-			];
-
-			const info = resolveFunctionInfo(symbols, new vscode.Position(2, 2), doc);
-			assert.deepStrictEqual(info, { functionId: 'getHeatEmojiFromIntensity', anchorLine: 1 });
-		} finally {
-			await fs.rm(tempDir, { recursive: true, force: true });
-		}
-	});
 });
