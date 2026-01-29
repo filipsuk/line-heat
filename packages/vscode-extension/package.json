@@ -18,6 +18,7 @@
   ],
   "files": [
     "out/extension.js",
+    "icon.png",
     "README.md",
     "CHANGELOG.md"
   ],
