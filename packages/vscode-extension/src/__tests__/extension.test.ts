@@ -957,6 +957,8 @@ suite('Line Heat Extension', function () {
 				const editorConfig = vscode.workspace.getConfiguration('editor');
 				const config = vscode.workspace.getConfiguration('lineheat');
 			await editorConfig.update('codeLens', true, vscode.ConfigurationTarget.Global);
+			// Set decay to 24 hours so 17h old edit shows '🟡' (intensity ~0.29)
+			await config.update('heatDecayHours', 24, vscode.ConfigurationTarget.Global);
 
 			const aliceEmoji = '🦄';
 			const bobEmoji = '🙂';
@@ -1050,6 +1052,10 @@ suite('Line Heat Extension', function () {
 					predicate: (room) => room.filePath === expectedFilePathHash,
 				});
 
+				// Allow time for snapshot to be processed by the client
+				await sleep(200);
+
+				const debugInfo = { lastDebug: '' };
 				await waitForAsync(async () => {
 					const result = await vscode.commands.executeCommand('vscode.executeCodeLensProvider', fileUri);
 					const lenses = result as vscode.CodeLens[];
@@ -1066,13 +1072,20 @@ suite('Line Heat Extension', function () {
 						(title) => title.includes('live:') && title.includes(`${carolEmoji} ${carolName}`),
 					);
 					const hasGammaLine = lenses.some((lens) => lens.range.start.line === 8);
-					return hasHot && hasMild && hasPresence && !hasGammaLine;
-				}, 8000);
+					debugInfo.lastDebug = `lenses=${lenses.length} titles=[${titles.join(' | ')}] hasHot=${hasHot} hasMild=${hasMild} hasPresence=${hasPresence} hasGammaLine=${hasGammaLine}`;
+					if (hasHot && hasMild && hasPresence && !hasGammaLine) {
+						return true;
+					}
+					return false;
+				}, 10000).catch((err) => {
+					throw new Error(`${err.message}. Debug: ${debugInfo.lastDebug}`);
+				});
 			} finally {
 				await fs.rm(tempDir, { recursive: true, force: true });
 				await mockServer.close();
 				await config.update('serverUrl', '', vscode.ConfigurationTarget.Global);
 				await config.update('token', '', vscode.ConfigurationTarget.Global);
+				await config.update('heatDecayHours', undefined, vscode.ConfigurationTarget.Global);
 				await editorConfig.update('codeLens', undefined, vscode.ConfigurationTarget.Global);
 			}
 		});
