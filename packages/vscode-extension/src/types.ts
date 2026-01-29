@@ -16,6 +16,7 @@ export type PresenceEntry = {
 };
 
 export type FileDeltaPayload = {
+	hashVersion?: string;
 	repoId: string;
 	filePath: string;
 	updates: {
@@ -25,6 +26,7 @@ export type FileDeltaPayload = {
 };
 
 export type RoomSnapshotPayload = {
+	hashVersion?: string;
 	repoId: string;
 	filePath: string;
 	functions: HeatEntry[];
@@ -44,6 +46,8 @@ export type ServerIncompatiblePayload = {
 export type ProtocolModule = {
 	DEFAULT_RETENTION_DAYS: number;
 	PROTOCOL_VERSION: string;
+	HASH_VERSION: string;
+	sha256Hex: (value: string) => string;
 	EVENT_ROOM_JOIN: string;
 	EVENT_ROOM_LEAVE: string;
 	EVENT_EDIT_PUSH: string;

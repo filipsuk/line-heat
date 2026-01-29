@@ -19,7 +19,6 @@ import {
 } from './types';
 
 import {
-	formatFunctionLabel,
 	formatRelativeTime,
 } from './format';
 import { createLogger } from './logger';
@@ -56,6 +55,7 @@ let activePresence: PresenceState | undefined;
 let presenceKeepaliveTimer: NodeJS.Timeout | undefined;
 
 const roomStateByKey = new Map<RoomKey, RoomState>();
+const roomKeyByHashedKey = new Map<RoomKey, RoomKey>();
 const maxSubscribedRooms = 10;
 
 let heatCodeLensProvider: HeatCodeLensProvider | undefined;
@@ -70,6 +70,35 @@ const isSamePresence = (left: PresenceState | undefined, right: PresenceState | 
 	left?.anchorLine === right?.anchorLine;
 
 const getRoomKey = (room: RoomContext): RoomKey => `${room.repoId}:${room.filePath}`;
+
+const getHashedRoomPayload = (room: RoomContext) => {
+	if (!protocolModule) {
+		return { repoId: room.repoId, filePath: room.filePath };
+	}
+	return {
+		hashVersion: protocolModule.HASH_VERSION,
+		repoId: protocolModule.sha256Hex(room.repoId),
+		filePath: protocolModule.sha256Hex(room.filePath),
+	};
+};
+
+const getHashedRoomKey = (room: RoomContext) => {
+	const hashed = getHashedRoomPayload(room);
+	return `${hashed.repoId}:${hashed.filePath}`;
+};
+
+const getHashedPresencePayload = (presence: PresenceState) => {
+	if (!protocolModule) {
+		return presence;
+	}
+	return {
+		hashVersion: protocolModule.HASH_VERSION,
+		repoId: protocolModule.sha256Hex(presence.repoId),
+		filePath: protocolModule.sha256Hex(presence.filePath),
+		functionId: protocolModule.sha256Hex(presence.functionId),
+		anchorLine: presence.anchorLine,
+	};
+};
 
 const formatPresenceState = (presence: PresenceState | undefined) =>
 	presence
@@ -93,7 +122,10 @@ const emitRoomJoin = (logger: LineHeatLogger, room: RoomContext) => {
 	if (!activeSocket?.connected || !protocolModule) {
 		return;
 	}
-	activeSocket.emit(protocolModule.EVENT_ROOM_JOIN, room);
+	const hashedRoom = getHashedRoomPayload(room);
+	const hashedRoomKey = getHashedRoomKey(room);
+	roomKeyByHashedKey.set(hashedRoomKey, getRoomKey(room));
+	activeSocket.emit(protocolModule.EVENT_ROOM_JOIN, hashedRoom);
 	logger.debug(`lineheat: room:join repoId=${room.repoId} filePath=${room.filePath}`);
 };
 
@@ -101,7 +133,10 @@ const emitRoomLeave = (logger: LineHeatLogger, room: RoomContext) => {
 	if (!activeSocket?.connected || !protocolModule) {
 		return;
 	}
-	activeSocket.emit(protocolModule.EVENT_ROOM_LEAVE, room);
+	const hashedRoom = getHashedRoomPayload(room);
+	const hashedRoomKey = getHashedRoomKey(room);
+	roomKeyByHashedKey.delete(hashedRoomKey);
+	activeSocket.emit(protocolModule.EVENT_ROOM_LEAVE, hashedRoom);
 	logger.debug(`lineheat: room:leave repoId=${room.repoId} filePath=${room.filePath}`);
 };
 
@@ -112,7 +147,7 @@ const emitPresenceSet = (logger: LineHeatLogger, payload: PresenceState) => {
 		);
 		return;
 	}
-	activeSocket.emit(protocolModule.EVENT_PRESENCE_SET, payload);
+	activeSocket.emit(protocolModule.EVENT_PRESENCE_SET, getHashedPresencePayload(payload));
 	logger.debug(`lineheat: presence:set ${formatPresenceState(payload)}`);
 };
 
@@ -123,7 +158,7 @@ const emitPresenceClear = (logger: LineHeatLogger, payload: RoomContext) => {
 		);
 		return;
 	}
-	activeSocket.emit(protocolModule.EVENT_PRESENCE_CLEAR, payload);
+	activeSocket.emit(protocolModule.EVENT_PRESENCE_CLEAR, getHashedRoomPayload(payload));
 	logger.debug(`lineheat: presence:clear repoId=${payload.repoId} filePath=${payload.filePath}`);
 };
 
@@ -167,6 +202,7 @@ const disconnectSocket = () => {
 	joinedRooms.clear();
 	activePresence = undefined;
 	roomStateByKey.clear();
+	roomKeyByHashedKey.clear();
 	retentionDays = getDefaultRetentionDays();
 };
 
@@ -240,6 +276,7 @@ const connectSocket = (
 		joinedRooms.clear();
 		activePresence = undefined;
 		roomStateByKey.clear();
+		roomKeyByHashedKey.clear();
 		heatCodeLensProvider?.refresh();
 		updateStatusBar();
 	});
@@ -590,7 +627,13 @@ const ensurePresenceKeepalive = (logger: LineHeatLogger) => {
 };
 
 const updateRoomStateFromSnapshot = (payload: RoomSnapshotPayload) => {
-	const roomKey = getRoomKey({ repoId: payload.repoId, filePath: payload.filePath });
+	const payloadKey = `${payload.repoId}:${payload.filePath}`;
+	const roomKey = payload.hashVersion && payload.hashVersion === protocolModule?.HASH_VERSION
+		? roomKeyByHashedKey.get(payloadKey)
+		: getRoomKey({ repoId: payload.repoId, filePath: payload.filePath });
+	if (!roomKey) {
+		return;
+	}
 	const heatByFunctionId = new Map<string, RoomSnapshotPayload['functions'][number]>();
 	const presenceByFunctionId = new Map<string, RoomSnapshotPayload['presence'][number]>();
 	for (const heat of payload.functions) {
@@ -605,7 +648,13 @@ const updateRoomStateFromSnapshot = (payload: RoomSnapshotPayload) => {
 };
 
 const updateRoomStateFromDelta = (payload: FileDeltaPayload) => {
-	const roomKey = getRoomKey({ repoId: payload.repoId, filePath: payload.filePath });
+	const payloadKey = `${payload.repoId}:${payload.filePath}`;
+	const roomKey = payload.hashVersion && payload.hashVersion === protocolModule?.HASH_VERSION
+		? roomKeyByHashedKey.get(payloadKey)
+		: getRoomKey({ repoId: payload.repoId, filePath: payload.filePath });
+	if (!roomKey) {
+		return;
+	}
 	const current = roomStateByKey.get(roomKey) ?? {
 		heatByFunctionId: new Map<string, RoomSnapshotPayload['functions'][number]>(),
 		presenceByFunctionId: new Map<string, RoomSnapshotPayload['presence'][number]>(),
@@ -641,12 +690,13 @@ export function activate(context: vscode.ExtensionContext) {
 		getLogger: () => activeLogger,
 		getSettings: () => currentSettings,
 		getUserId: () => userId,
+		getHasher: () => protocolModule?.sha256Hex,
 		getRoomState: (roomKey) => roomStateByKey.get(roomKey),
 	});
 	context.subscriptions.push(
 		vscode.languages.registerCodeLensProvider({ scheme: 'file' }, heatCodeLensProvider),
 		vscode.commands.registerCommand('lineheat.showHeatDetails', (data: ActivityLensData) => {
-			const label = formatFunctionLabel(data.functionId);
+			const label = data.functionLabel;
 			const age = data.lastEditAt ? formatRelativeTime(Date.now(), data.lastEditAt) : undefined;
 			const editors = data.editors.length > 0 ? data.editors.join(' ') : 'unknown';
 			const live = data.presence.length > 0 ? data.presence.join(' ') : 'none';
@@ -689,9 +739,10 @@ export function activate(context: vscode.ExtensionContext) {
 			if (context && activeSocket?.connected && protocolModule && roomKey && joinedRooms.has(roomKey)) {
 				for (const functionInfo of functionUpdates.values()) {
 					activeSocket.emit(protocolModule.EVENT_EDIT_PUSH, {
-						repoId: context.repoId,
-						filePath: context.filePath,
-						functionId: functionInfo.functionId,
+						hashVersion: protocolModule.HASH_VERSION,
+						repoId: protocolModule.sha256Hex(context.repoId),
+						filePath: protocolModule.sha256Hex(context.filePath),
+						functionId: protocolModule.sha256Hex(functionInfo.functionId),
 						anchorLine: functionInfo.anchorLine,
 					});
 					logger.debug(`lineheat: edit:push functionId=${functionInfo.functionId}`);
@@ -774,6 +825,7 @@ export function deactivate() {
 	desiredPresence = undefined;
 	activePresence = undefined;
 	roomStateByKey.clear();
+	roomKeyByHashedKey.clear();
 	resetSymbolState();
 	if (presenceKeepaliveTimer) {
 		clearInterval(presenceKeepaliveTimer);

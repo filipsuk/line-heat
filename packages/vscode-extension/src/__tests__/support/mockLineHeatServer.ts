@@ -11,6 +11,7 @@ import type {
 
 
 type JoinedRoom = {
+	hashVersion?: string;
 	repoId: string;
 	filePath: string;
 };
@@ -94,7 +95,7 @@ export const startMockLineHeatServer = async (params: {
 			serverRetentionDays: params.retentionDays ?? protocol.DEFAULT_RETENTION_DAYS,
 		} satisfies ServerHelloPayload);
 		socket.on(protocol.EVENT_ROOM_JOIN, (payload: RoomJoinPayload) => {
-			const room = { repoId: payload.repoId, filePath: payload.filePath };
+			const room = { hashVersion: payload.hashVersion, repoId: payload.repoId, filePath: payload.filePath };
 			joinQueue.push(room);
 			if (params.autoRoomSnapshot) {
 				const snapshot = params.autoRoomSnapshot({ room, auth: lastAuth });

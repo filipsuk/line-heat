@@ -16,6 +16,7 @@ import {
   PRESENCE_TTL_SECONDS,
   PROTOCOL_VERSION,
 } from "@line-heat/protocol";
+import * as protocol from "@line-heat/protocol";
 import type {
   EditPushPayload,
   FileDeltaPayload,
@@ -60,6 +61,8 @@ type PendingDelta = {
 
 const DELTA_COALESCE_MS = 200;
 const PRESENCE_CLEANUP_MS = 5000;
+const HASH_VERSION = (protocol as unknown as { HASH_VERSION: string }).HASH_VERSION;
+const HASH_HEX_RE = /^[0-9a-f]{64}$/;
 
 type HeatUpdate = NonNullable<FileDeltaPayload["updates"]["heat"]>[number];
 type PresenceUpdate =
@@ -148,6 +151,11 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
     if (!payload || typeof payload !== "object") {
       return "payload is required";
     }
+    const hashVersion = (payload as { hashVersion?: string }).hashVersion;
+    const hasHashVersion = hashVersion !== undefined;
+    if (hasHashVersion && hashVersion !== HASH_VERSION) {
+      return "hashVersion must match HASH_VERSION";
+    }
     if (typeof payload.repoId !== "string" || payload.repoId.trim().length === 0) {
       return "repoId is required";
     }
@@ -161,7 +169,15 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
     if (filePath.length > FILE_PATH_MAX_LENGTH) {
       return "filePath is too long";
     }
-    if (filePath.startsWith("/") || filePath.includes("..")) {
+    if (hasHashVersion) {
+      if (!HASH_HEX_RE.test(payload.repoId.trim())) {
+        return "repoId must be sha256 hex";
+      }
+      if (!HASH_HEX_RE.test(filePath)) {
+        return "filePath must be sha256 hex";
+      }
+    }
+    if (!hasHashVersion && (filePath.startsWith("/") || filePath.includes(".."))) {
       return "filePath must be git-root relative";
     }
     return null;
@@ -174,6 +190,10 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
     }
     if (typeof payload.functionId !== "string" || payload.functionId.length === 0) {
       return "functionId is required";
+    }
+    const hashVersion = (payload as { hashVersion?: string }).hashVersion;
+    if (hashVersion !== undefined && !HASH_HEX_RE.test(payload.functionId)) {
+      return "functionId must be sha256 hex";
     }
     if (!Number.isInteger(payload.anchorLine) || payload.anchorLine <= 0) {
       return "anchorLine must be positive";

@@ -55,6 +55,13 @@ Settings live under the `lineheat.*` namespace:
 
 When connected, the status bar shows the server retention (example: `LineHeat: 7d`).
 
+## Privacy
+
+- No source code, keystrokes, or file contents are transmitted.
+- `repoId`, `filePath`, and `functionId` are sent/stored as SHA-256 hashes (64-char lowercase hex). Raw filenames/paths and symbol names do not leave your machine.
+- Hashes are unsalted + deterministic (stable across sessions) which means common paths/names may be guessable.
+- Non-anonymity note: `userId` + `displayName` + `emoji` are shared to teammates in the same file room.
+
 ## Logs / Debugging
 
 - Open the Output panel and select the `LineHeat` log channel.

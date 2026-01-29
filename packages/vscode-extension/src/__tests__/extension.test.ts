@@ -3,6 +3,7 @@ import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { HASH_VERSION, sha256Hex } from '@line-heat/protocol';
 
 import { startMockLineHeatServer } from './support/mockLineHeatServer';
 
@@ -471,12 +472,13 @@ suite('Line Heat Extension', function () {
 				const ownUserId = auth?.userId ?? 'unknown';
 				const now = Date.now();
 				return {
+					hashVersion: HASH_VERSION,
 					repoId: room.repoId,
 					filePath: room.filePath,
 					functions: [],
 					presence: [
 						{
-							functionId: 'testFunction',
+							functionId: sha256Hex('testFunction'),
 							anchorLine: 1,
 							users: [
 								{ userId: ownUserId, displayName: 'Me', emoji: '😎', lastSeenAt: now },
@@ -541,7 +543,8 @@ suite('Line Heat Extension', function () {
 				api.logger.messages.splice(0, api.logger.messages.length);
 
 				const expectedFilePath = path.relative(tempDir, filePath).split(path.sep).join('/');
-				await mockServer.waitForRoomJoin({ predicate: (room) => room.filePath === expectedFilePath });
+				const expectedFilePathHash = sha256Hex(expectedFilePath);
+				await mockServer.waitForRoomJoin({ predicate: (room) => room.filePath === expectedFilePathHash });
 
 				editor.selection = new vscode.Selection(new vscode.Position(5, 1), new vscode.Position(5, 1));
 				await waitFor(
@@ -596,8 +599,9 @@ suite('Line Heat Extension', function () {
 			await vscode.window.showTextDocument(doc, { preview: false });
 
 			const expectedFilePath = path.relative(tempDir, filePath).split(path.sep).join('/');
+			const expectedFilePathHash = sha256Hex(expectedFilePath);
 			await mockServer.waitForRoomJoin({
-				predicate: (room) => room.filePath === expectedFilePath,
+				predicate: (room) => room.filePath === expectedFilePathHash,
 			});
 
 			await waitForAsync(async () => {
@@ -639,11 +643,12 @@ suite('Line Heat Extension', function () {
 					const now = Date.now();
 					const lastEditAt = now - 2 * 60 * 1000;
 					return {
+						hashVersion: HASH_VERSION,
 						repoId: room.repoId,
 						filePath: room.filePath,
 						functions: [
 							{
-								functionId: 'testFunction',
+								functionId: sha256Hex('testFunction'),
 								anchorLine: 1,
 								lastEditAt,
 								topEditors: [
@@ -681,8 +686,9 @@ suite('Line Heat Extension', function () {
 				await vscode.window.showTextDocument(doc, { preview: false });
 
 				const expectedFilePath = path.relative(tempDir, filePath).split(path.sep).join('/');
+				const expectedFilePathHash = sha256Hex(expectedFilePath);
 				await mockServer.waitForRoomJoin({
-					predicate: (room) => room.filePath === expectedFilePath,
+					predicate: (room) => room.filePath === expectedFilePathHash,
 				});
 
 				await waitForAsync(async () => {
@@ -725,11 +731,12 @@ suite('Line Heat Extension', function () {
 					const now = Date.now();
 					const lastEditAt = now - 2 * 60 * 1000;
 					return {
+						hashVersion: HASH_VERSION,
 						repoId: room.repoId,
 						filePath: room.filePath,
 						functions: [
 							{
-								functionId: 'testFunction',
+								functionId: sha256Hex('testFunction'),
 								anchorLine: 1,
 								lastEditAt,
 								topEditors: [
@@ -766,8 +773,9 @@ suite('Line Heat Extension', function () {
 				await vscode.window.showTextDocument(doc, { preview: false });
 
 				const expectedFilePath = path.relative(tempDir, filePath).split(path.sep).join('/');
+				const expectedFilePathHash = sha256Hex(expectedFilePath);
 				await mockServer.waitForRoomJoin({
-					predicate: (room) => room.filePath === expectedFilePath,
+					predicate: (room) => room.filePath === expectedFilePathHash,
 				});
 
 				await waitForAsync(async () => {
@@ -827,11 +835,14 @@ suite('Line Heat Extension', function () {
 			await vscode.window.showTextDocument(doc, { preview: false });
 
 			const expectedFilePath = path.relative(tempDir, filePath).split(path.sep).join('/');
+			const expectedFilePathHash = sha256Hex(expectedFilePath);
+			const expectedRepoIdHash = sha256Hex('github.com/acme/lineheat');
 			const joined = await mockServer.waitForRoomJoin({
-				predicate: (room) => room.filePath === expectedFilePath,
+				predicate: (room) => room.filePath === expectedFilePathHash,
 			});
-			assert.strictEqual(joined.filePath, expectedFilePath);
-			assert.strictEqual(joined.repoId, 'github.com/acme/lineheat');
+			assert.strictEqual(joined.hashVersion, HASH_VERSION);
+			assert.strictEqual(joined.filePath, expectedFilePathHash);
+			assert.strictEqual(joined.repoId, expectedRepoIdHash);
 			const auth = mockServer.getLastAuth();
 			assert.ok(auth?.token === token, 'Expected extension to connect with configured token');
 		} finally {
@@ -861,16 +872,17 @@ suite('Line Heat Extension', function () {
 			const mockServer = await startMockLineHeatServer({
 				token,
 				retentionDays: 7,
-					autoRoomSnapshot: ({ room }) => {
-						const now = Date.now();
-						const alphaLastEditAt = now - 2 * 60 * 1000;
-						const betaLastEditAt = now - 17 * 60 * 60 * 1000;
-						return {
-							repoId: room.repoId,
-							filePath: room.filePath,
-							functions: [
+				autoRoomSnapshot: ({ room }) => {
+					const now = Date.now();
+					const alphaLastEditAt = now - 2 * 60 * 1000;
+					const betaLastEditAt = now - 17 * 60 * 60 * 1000;
+					return {
+						hashVersion: HASH_VERSION,
+						repoId: room.repoId,
+						filePath: room.filePath,
+						functions: [
 							{
-								functionId: 'alpha',
+								functionId: sha256Hex('alpha'),
 								anchorLine: 1,
 								lastEditAt: alphaLastEditAt,
 								topEditors: [
@@ -880,21 +892,21 @@ suite('Line Heat Extension', function () {
 								],
 							},
 							{
-								functionId: 'beta',
+								functionId: sha256Hex('beta'),
 								anchorLine: 5,
 								lastEditAt: betaLastEditAt,
 								topEditors: [
 									{ userId: 'u2', displayName: aliceName, emoji: aliceEmoji, lastEditAt: betaLastEditAt },
 								],
-								},
-							],
-							presence: [
-								{
-									functionId: 'alpha',
-									anchorLine: 1,
-									users: [
-										{ userId: 'u5', displayName: carolName, emoji: carolEmoji, lastSeenAt: now },
-									],
+							},
+						],
+						presence: [
+							{
+								functionId: sha256Hex('alpha'),
+								anchorLine: 1,
+								users: [
+									{ userId: 'u5', displayName: carolName, emoji: carolEmoji, lastSeenAt: now },
+								],
 								},
 							],
 						};
@@ -937,8 +949,9 @@ suite('Line Heat Extension', function () {
 				await vscode.window.showTextDocument(doc, { preview: false });
 
 				const expectedFilePath = path.relative(tempDir, filePath).split(path.sep).join('/');
+				const expectedFilePathHash = sha256Hex(expectedFilePath);
 				await mockServer.waitForRoomJoin({
-					predicate: (room) => room.filePath === expectedFilePath,
+					predicate: (room) => room.filePath === expectedFilePathHash,
 				});
 
 				await waitForAsync(async () => {
@@ -968,6 +981,111 @@ suite('Line Heat Extension', function () {
 			}
 		});
 
+		test('preserves non-self age when local user edits the same function', async () => {
+			const token = 'devtoken';
+			const editorConfig = vscode.workspace.getConfiguration('editor');
+			const config = vscode.workspace.getConfiguration('lineheat');
+			await editorConfig.update('codeLens', true, vscode.ConfigurationTarget.Global);
+
+			const aliceEmoji = '🦄';
+			const aliceName = 'Alice';
+			const selfName = 'Me';
+			const selfEmoji = '😎';
+
+			const mockServer = await startMockLineHeatServer({
+				token,
+				retentionDays: 7,
+				autoRoomSnapshot: ({ room, auth }) => {
+					const ownUserId = auth?.userId ?? 'unknown';
+					const now = Date.now();
+					// Non-self edit happened 30 minutes ago
+					const nonSelfLastEditAt = now - 30 * 60 * 1000;
+					// Self edit happened 2 minutes ago (newer)
+					const selfLastEditAt = now - 2 * 60 * 1000;
+					return {
+						hashVersion: HASH_VERSION,
+						repoId: room.repoId,
+						filePath: room.filePath,
+						functions: [
+							{
+								functionId: sha256Hex('testFunction'),
+								anchorLine: 1,
+								lastEditAt: selfLastEditAt, // Overall heat timestamp is self (newer)
+								topEditors: [
+									{ userId: 'u2', displayName: aliceName, emoji: aliceEmoji, lastEditAt: nonSelfLastEditAt },
+									{ userId: ownUserId, displayName: selfName, emoji: selfEmoji, lastEditAt: selfLastEditAt },
+								],
+							},
+						],
+						presence: [],
+					};
+				},
+			});
+
+			await config.update('serverUrl', mockServer.serverUrl, vscode.ConfigurationTarget.Global);
+			await config.update('token', token, vscode.ConfigurationTarget.Global);
+			await config.update('displayName', selfName, vscode.ConfigurationTarget.Global);
+			await config.update('emoji', selfEmoji, vscode.ConfigurationTarget.Global);
+
+			const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+			assert.ok(extension, 'Extension not found');
+			await extension.activate();
+
+			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'line-heat-non-self-age-'));
+			try {
+				await runGit(['init'], tempDir);
+				await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
+
+				const filePath = path.join(tempDir, 'age.ts');
+				const fileUri = vscode.Uri.file(filePath);
+				await fs.writeFile(
+					filePath,
+					'function testFunction() {\n  const value = 42;\n  return value;\n}',
+					'utf8',
+				);
+
+				const doc = await vscode.workspace.openTextDocument(fileUri);
+				await vscode.window.showTextDocument(doc, { preview: false });
+
+				const expectedFilePath = path.relative(tempDir, filePath).split(path.sep).join('/');
+				const expectedFilePathHash = sha256Hex(expectedFilePath);
+				await mockServer.waitForRoomJoin({
+					predicate: (room) => room.filePath === expectedFilePathHash,
+				});
+
+				await waitForAsync(async () => {
+					const result = await vscode.commands.executeCommand('vscode.executeCodeLensProvider', fileUri);
+					const lenses = result as vscode.CodeLens[];
+					const heatLens = lenses.find(
+						(lens) => lens.command?.command === 'lineheat.showHeatDetails',
+					);
+					assert.ok(heatLens, 'Expected to find heat CodeLens');
+					
+					const title = heatLens.command?.title ?? '';
+					// Should show the non-self age (30 minutes ago), not self age (2 minutes ago)
+					// formatRelativeTime should return "30m" for 30 minutes ago
+					assert.ok(title.includes('30m'), `Expected title to contain "30m" (non-self age), got: ${title}`);
+					assert.ok(title.includes('edit:'), `Expected title to contain "edit:", got: ${title}`);
+					assert.ok(title.includes(`${aliceEmoji} ${aliceName}`), `Expected title to contain Alice, got: ${title}`);
+					// Should not contain self user in the title
+					assert.ok(!title.includes(selfName), `Expected title to not contain self user, got: ${title}`);
+					
+					// Tooltip should also use the non-self age
+					const tooltip = heatLens.command?.tooltip ?? '';
+					assert.ok(tooltip.includes('30m'), `Expected tooltip to contain "30m", got: ${tooltip}`);
+					return true;
+				}, 8000);
+			} finally {
+				await fs.rm(tempDir, { recursive: true, force: true });
+				await mockServer.close();
+				await config.update('serverUrl', '', vscode.ConfigurationTarget.Global);
+				await config.update('token', '', vscode.ConfigurationTarget.Global);
+				await config.update('displayName', '', vscode.ConfigurationTarget.Global);
+				await config.update('emoji', '', vscode.ConfigurationTarget.Global);
+				await editorConfig.update('codeLens', undefined, vscode.ConfigurationTarget.Global);
+			}
+		});
+
 		test('captures screenshot with heat CodeLens', async () => {
 			const token = 'devtoken';
 			const editorConfig = vscode.workspace.getConfiguration('editor');
@@ -985,11 +1103,12 @@ suite('Line Heat Extension', function () {
 					const now = Date.now();
 					const alphaLastEditAt = now - 2 * 60 * 1000;
 					return {
+						hashVersion: HASH_VERSION,
 						repoId: room.repoId,
 						filePath: room.filePath,
 						functions: [
 							{
-								functionId: 'alpha',
+								functionId: sha256Hex('alpha'),
 								anchorLine: 1,
 								lastEditAt: alphaLastEditAt,
 								topEditors: [
@@ -1000,7 +1119,7 @@ suite('Line Heat Extension', function () {
 						],
 						presence: [
 							{
-								functionId: 'alpha',
+								functionId: sha256Hex('alpha'),
 								anchorLine: 1,
 								users: [
 									{ userId: 'u9', displayName: bobName, emoji: bobEmoji, lastSeenAt: now },
@@ -1040,8 +1159,9 @@ suite('Line Heat Extension', function () {
 				await vscode.window.showTextDocument(doc, { preview: false });
 
 				const expectedFilePath = path.relative(tempDir, filePath).split(path.sep).join('/');
+				const expectedFilePathHash = sha256Hex(expectedFilePath);
 				await mockServer.waitForRoomJoin({
-					predicate: (room) => room.filePath === expectedFilePath,
+					predicate: (room) => room.filePath === expectedFilePathHash,
 				});
 
 				await waitForAsync(async () => {

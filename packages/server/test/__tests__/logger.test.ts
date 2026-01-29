@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { logger } from "../../src/adapters/logger.js";
 
 describe("Logger", () => {
   const originalEnv = process.env.LOG_LEVEL;
@@ -16,43 +15,55 @@ describe("Logger", () => {
     process.env.LOG_LEVEL = originalEnv;
   });
 
-  it("logs info messages by default", () => {
-    logger.info("test info");
-    expect(console.info).toHaveBeenCalledWith(
-      expect.stringContaining("[INFO] test info")
-    );
-  });
+  describe("with default environment", () => {
+    let logger: any;
 
-  it("does not log debug messages by default", () => {
-    logger.debug("test debug");
-    expect(console.debug).not.toHaveBeenCalled();
-  });
+    beforeEach(async () => {
+      vi.resetModules();
+      delete process.env.LOG_LEVEL;
+      
+      const loggerModule = await import("../../src/adapters/logger.js");
+      logger = loggerModule.logger;
+    });
 
-  it("logs warning messages", () => {
-    logger.warn("test warning");
-    expect(console.warn).toHaveBeenCalledWith(
-      expect.stringContaining("[WARN] test warning")
-    );
-  });
+    it("logs info messages by default", () => {
+      logger.info("test info");
+      expect(console.info).toHaveBeenCalledWith(
+        expect.stringContaining("[INFO] test info")
+      );
+    });
 
-  it("logs error messages", () => {
-    logger.error("test error");
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining("[ERROR] test error")
-    );
-  });
+    it("does not log debug messages by default", () => {
+      logger.debug("test debug");
+      expect(console.debug).not.toHaveBeenCalled();
+    });
 
-  it("includes metadata in log messages", () => {
-    logger.info("test with meta", { userId: "123", action: "test" });
-    expect(console.info).toHaveBeenCalledWith(
-      expect.stringContaining('{"userId":"123","action":"test"}')
-    );
-  });
+    it("logs warning messages", () => {
+      logger.warn("test warning");
+      expect(console.warn).toHaveBeenCalledWith(
+        expect.stringContaining("[WARN] test warning")
+      );
+    });
 
-  it("includes timestamp in log messages", () => {
-    logger.info("test timestamp");
-    expect(console.info).toHaveBeenCalledWith(
-      expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/)
-    );
+    it("logs error messages", () => {
+      logger.error("test error");
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining("[ERROR] test error")
+      );
+    });
+
+    it("includes metadata in log messages", () => {
+      logger.info("test with meta", { userId: "123", action: "test" });
+      expect(console.info).toHaveBeenCalledWith(
+        expect.stringContaining('{"userId":"123","action":"test"}')
+      );
+    });
+
+    it("includes timestamp in log messages", () => {
+      logger.info("test timestamp");
+      expect(console.info).toHaveBeenCalledWith(
+        expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/)
+      );
+    });
   });
 });

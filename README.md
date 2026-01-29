@@ -69,9 +69,11 @@ LineHeat is **not a surveillance tool**.
 
 - No global view of who is working or when
 - No source code, keystrokes, or file contents shared
+- No exact filenames/paths or symbol names leave your machine: the identifiers `repoId`, `filePath`, and `functionId` are transmitted/stored only as SHA-256 hashes (64-char lowercase hex)
+- Hashes are unsalted + deterministic (stable across sessions) which means common paths/names may be guessable
 - Retention defaults to 7 days (configurable)
 - The extension shows the current retention (e.g. `LineHeat: 7d`)
-- Your identity (name + emoji) is only visible to teammates who also have the same file open
+- Non-anonymity note: `userId` + `displayName` + `emoji` are shared to teammates in the same file room (i.e. teammates who also have the same file open)
 - No tracking of time, productivity, or individuals
 
 If you are not looking at a file, LineHeat shows you nothing about it.

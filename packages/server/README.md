@@ -74,7 +74,22 @@ Room key:
 
 `roomKey = repoId + ":" + filePath`
 
-### `filePath` Rules (Git-Root Relative)
+## Identifier Hashing (`hashVersion`)
+
+To reduce sensitive metadata exposure, clients may send hashed identifiers instead of path-like values.
+
+- Hashed identifiers: `repoId`, `filePath`, `functionId`
+- Signaling: include `hashVersion` in payloads
+- Supported: `hashVersion = "sha256-hex-v1"`
+
+When `hashVersion=sha256-hex-v1`:
+
+- `repoId`, `filePath`, and `functionId` MUST be SHA-256 hex digests: 64 characters, lowercase `[0-9a-f]`.
+- The server MUST treat these as opaque identifiers (no git-root/path semantics) and MUST validate by shape + `hashVersion`.
+
+Hashes are unsalted + deterministic (stable across sessions) which means common paths/names may be guessable.
+
+### `filePath` Rules (Git-Root Relative, plaintext mode)
 
 `filePath` MUST be:
 
@@ -100,11 +115,11 @@ All payloads are JSON, camelCase.
 
 | Event | Payload | Ack / Notes |
 | --- | --- | --- |
-| `room:join` | `{ repoId: string, filePath: string }` | Ack: `{ ok: true } \| { ok: false, error: string }` |
-| `room:leave` | `{ repoId: string, filePath: string }` | no ack |
-| `edit:push` | `{ repoId: string, filePath: string, functionId: string, anchorLine: number }` | server assigns `serverTs` and persists an event |
-| `presence:set` | `{ repoId: string, filePath: string, functionId: string, anchorLine: number }` | meaning: active cursor is inside this function |
-| `presence:clear` | `{ repoId: string, filePath: string }` | meaning: active cursor not inside any function in this file OR editor lost focus |
+| `room:join` | `{ repoId: string, filePath: string, hashVersion?: string }` | Ack: `{ ok: true } \| { ok: false, error: string }` |
+| `room:leave` | `{ repoId: string, filePath: string, hashVersion?: string }` | no ack |
+| `edit:push` | `{ repoId: string, filePath: string, functionId: string, anchorLine: number, hashVersion?: string }` | server assigns `serverTs` and persists an event |
+| `presence:set` | `{ repoId: string, filePath: string, functionId: string, anchorLine: number, hashVersion?: string }` | meaning: active cursor is inside this function |
+| `presence:clear` | `{ repoId: string, filePath: string, hashVersion?: string }` | meaning: active cursor not inside any function in this file OR editor lost focus |
 
 ### Server -> Client
 
@@ -142,12 +157,17 @@ Time authority:
 
 - General: never throw on bad input; validate and ignore/reject.
 - Handshake validation (reject connection if invalid): token, `clientProtocolVersion`, `userId`, `displayName`, `emoji`.
-- `room:join`: validate `repoId`/`filePath` (non-empty, <=512 chars, no `..`, no leading `/`). On failure: ack `{ ok: false, error: "..." }` and do not join.
-- `edit:push` / `presence:set` / `presence:clear`: if payload invalid OR socket is not currently joined to the room: ignore and log at debug level.
+- `room:join`: validation branches on `hashVersion`:
+  - if `hashVersion === "sha256-hex-v1"`: validate `repoId`/`filePath` as 64-char lowercase hex; on failure ack `{ ok: false, error: "..." }` and do not join.
+  - if `hashVersion` is missing: validate `repoId`/`filePath` as plaintext (non-empty, <=512 chars, no `..`, no leading `/`).
+  - if `hashVersion` is present but not supported: ack `{ ok: false, error: "..." }` and do not join.
+- `edit:push` / `presence:set` / `presence:clear`: if payload invalid OR socket is not currently joined to the room: ignore and log at debug level. Validation branches on `hashVersion` the same way as `room:join`.
 
 ## `repoId` Normalization Algorithm
 
 Mechanism (MVP): client derives `repoId` by spawning git:
+
+Note: This section defines the plaintext `repoId` derivation. When sending hashed identifiers, clients hash the derived `repoId` and send the SHA-256 hex string instead.
 
 1. Find git root: `git rev-parse --show-toplevel`.
 2. Read remote URL (prefer origin): `git config --get remote.origin.url`.
@@ -186,6 +206,8 @@ Examples:
 - `ssh://git@gitlab.myco.com:2222/Team/Repo.git` -> `gitlab.myco.com:2222/team/repo`
 
 ## `functionId` Algorithm (Including Escaping + `anchorLine`)
+
+Note: This section defines the plaintext `functionId` derivation. When sending hashed identifiers, clients hash the derived `functionId` and send the SHA-256 hex string instead.
 
 ### Symbol Source
 
@@ -314,6 +336,8 @@ Table: `events`
 | `userId` | `TEXT NOT NULL` | |
 | `displayName` | `TEXT NOT NULL` | |
 | `emoji` | `TEXT NOT NULL` | |
+
+Legacy note: the DB stores whatever identifiers were sent at the time. If you are upgrading from older versions, historical rows may contain plaintext `repoId`/`filePath`/`functionId` unless you wipe/migrate the database.
 
 Indexes:
 

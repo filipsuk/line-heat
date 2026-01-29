@@ -11,7 +11,9 @@ import {
   EVENT_PRESENCE_SET,
   EVENT_ROOM_JOIN,
   EVENT_SERVER_INCOMPATIBLE,
+  HASH_VERSION,
   PROTOCOL_VERSION,
+  sha256Hex,
 } from "@line-heat/protocol";
 import type { FileDeltaPayload, RoomJoinAck } from "@line-heat/protocol";
 
@@ -161,6 +163,67 @@ describe("realtime socket server", () => {
     const delta = await deltaPromise;
     const presenceUpdate = delta.updates.presence?.[0];
     expect(presenceUpdate?.users[0]?.userId).toBe("user-a");
+
+    clientA.close();
+    clientB.close();
+  });
+
+  it("accepts hashed identifiers when hashVersion is provided", async () => {
+    serverHandle = await startServer();
+    const clientA = connectClient(serverHandle.port, {
+      userId: "user-a",
+      displayName: "Ada",
+      emoji: "🔥",
+    });
+    const clientB = connectClient(serverHandle.port, {
+      userId: "user-b",
+      displayName: "Grace",
+      emoji: "✨",
+    });
+    const repoId = sha256Hex("repo");
+    const filePath = sha256Hex("file");
+    const functionId = sha256Hex("fn");
+
+    await new Promise<void>((resolve, reject) => {
+      clientA.emit(
+        EVENT_ROOM_JOIN,
+        { repoId, filePath, hashVersion: HASH_VERSION },
+        (ack: RoomJoinAck) =>
+          ack.ok ? resolve() : reject(new Error(ack.error))
+      );
+    });
+    await new Promise<void>((resolve, reject) => {
+      clientB.emit(
+        EVENT_ROOM_JOIN,
+        { repoId, filePath, hashVersion: HASH_VERSION },
+        (ack: RoomJoinAck) =>
+          ack.ok ? resolve() : reject(new Error(ack.error))
+      );
+    });
+
+    const deltaPromise = waitForDelta(
+      clientB,
+      (payload) =>
+        payload.repoId === repoId &&
+        payload.filePath === filePath &&
+        payload.updates.heat?.some((heat) => heat.functionId === functionId) ===
+          true
+    );
+
+    clientA.emit(EVENT_EDIT_PUSH, {
+      repoId,
+      filePath,
+      functionId,
+      anchorLine: 12,
+      hashVersion: HASH_VERSION,
+    });
+
+    const delta = await deltaPromise;
+    expect(delta.repoId).toBe(repoId);
+    expect(delta.filePath).toBe(filePath);
+    expect(delta.updates.heat?.some((heat) => heat.functionId === functionId)).toBe(
+      true
+    );
 
     clientA.close();
     clientB.close();
