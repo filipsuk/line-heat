@@ -17,6 +17,7 @@ export const readSettings = (): LineHeatSettings => {
 		emoji: emojiSetting || '🙂',
 		heatDecayHours: config.get<number>('heatDecayHours', 24),
 		logLevel: config.get<LogLevel>('logLevel', 'info'),
+		presenceNotificationCooldownMinutes: config.get<number>('presenceNotificationCooldownMinutes', 15),
 	};
 };
 

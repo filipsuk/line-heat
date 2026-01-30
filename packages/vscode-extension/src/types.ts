@@ -66,6 +66,7 @@ export type LineHeatSettings = {
 	emoji: string;
 	heatDecayHours: number;
 	logLevel: LogLevel;
+	presenceNotificationCooldownMinutes: number;
 };
 
 export type LineHeatLogger = {

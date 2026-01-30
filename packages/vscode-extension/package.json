@@ -67,6 +67,12 @@
             "debug"
           ],
           "description": "LineHeat log verbosity."
+        },
+        "lineheat.presenceNotificationCooldownMinutes": {
+          "type": "number",
+          "default": 15,
+          "minimum": 0,
+          "description": "Minimum time (in minutes) between presence conflict notifications for the same file. Set to 0 to disable notifications."
         }
       }
     }
