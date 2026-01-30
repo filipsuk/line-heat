@@ -58,6 +58,9 @@ const roomStateByKey = new Map<RoomKey, RoomState>();
 const roomKeyByHashedKey = new Map<RoomKey, RoomKey>();
 const maxSubscribedRooms = 10;
 
+// Track last notification time per file (roomKey -> timestamp)
+const lastNotificationTimeByRoom = new Map<RoomKey, number>();
+
 let heatCodeLensProvider: HeatCodeLensProvider | undefined;
 
 const isSameRoom = (left: RoomContext | undefined, right: RoomContext | undefined) =>
@@ -116,6 +119,89 @@ const formatSymbolsSummary = (symbols: vscode.DocumentSymbol[], maxItems = 8) =>
 				`${kindLabel(symbol.kind)} name=${JSON.stringify(symbol.name)} sel=${formatRange(symbol.selectionRange)} range=${formatRange(symbol.range)} children=${symbol.children.length}`,
 		)
 		.join(' | ');
+};
+
+const maybeNotifyPresenceConflict = (
+	roomKey: RoomKey,
+	logger: LineHeatLogger,
+) => {
+	if (!currentSettings || !userId) {
+		return;
+	}
+
+	const cooldownMinutes = currentSettings.presenceNotificationCooldownMinutes;
+	// Skip if notifications are disabled (cooldown = 0)
+	if (cooldownMinutes === 0) {
+		return;
+	}
+
+	const cooldownMs = cooldownMinutes * 60 * 1000;
+	const now = Date.now();
+
+	// Check cooldown
+	const lastNotified = lastNotificationTimeByRoom.get(roomKey);
+	if (lastNotified && (now - lastNotified) < cooldownMs) {
+		logger.debug(`lineheat: presence-notification:skip reason=cooldown roomKey=${roomKey} lastNotified=${now - lastNotified}ms ago`);
+		return;
+	}
+
+	// Get room state
+	const roomState = roomStateByKey.get(roomKey);
+	if (!roomState) {
+		logger.debug(`lineheat: presence-notification:skip reason=no-room-state roomKey=${roomKey}`);
+		return;
+	}
+
+	// Check for other users' presence (exclude self)
+	const otherPresenceUsers: Array<{ emoji: string; displayName: string }> = [];
+	for (const presence of roomState.presenceByFunctionId.values()) {
+		for (const user of presence.users) {
+			if (user.userId !== userId) {
+				// Avoid duplicates
+				if (!otherPresenceUsers.some(u => u.displayName === user.displayName)) {
+					otherPresenceUsers.push({ emoji: user.emoji, displayName: user.displayName });
+				}
+			}
+		}
+	}
+
+	// Check for recent heat (edits by others)
+	const recentEditors: Array<{ emoji: string; displayName: string }> = [];
+	for (const heat of roomState.heatByFunctionId.values()) {
+		for (const editor of heat.topEditors) {
+			if (editor.userId !== userId) {
+				// Avoid duplicates
+				if (!recentEditors.some(e => e.displayName === editor.displayName)) {
+					recentEditors.push({ emoji: editor.emoji, displayName: editor.displayName });
+				}
+			}
+		}
+	}
+
+	const hasOtherPresence = otherPresenceUsers.length > 0;
+	const hasRecentActivity = recentEditors.length > 0;
+
+	if (!hasOtherPresence && !hasRecentActivity) {
+		logger.debug(`lineheat: presence-notification:skip reason=no-activity roomKey=${roomKey}`);
+		return;
+	}
+
+	// Build notification message
+	let message: string;
+	if (hasOtherPresence) {
+		const userLabels = otherPresenceUsers.slice(0, 3).map(u => `${u.emoji} ${u.displayName}`).join(', ');
+		const verb = otherPresenceUsers.length === 1 ? 'is' : 'are';
+		message = `LineHeat: ${userLabels} ${verb} also in this file`;
+	} else {
+		const editorLabels = recentEditors.slice(0, 3).map(e => `${e.emoji} ${e.displayName}`).join(', ');
+		message = `LineHeat: Recent activity by ${editorLabels}`;
+	}
+
+	logger.info(`lineheat: presence-notification:show roomKey=${roomKey} message="${message}"`);
+
+	void vscode.window.showInformationMessage(message);
+
+	lastNotificationTimeByRoom.set(roomKey, now);
 };
 
 const emitRoomJoin = (logger: LineHeatLogger, room: RoomContext) => {
@@ -596,7 +682,8 @@ const updateActiveEditorState = async (
 ) => {
 	const previousRoom = activeRoomContext;
 	await refreshActiveRepoState(logger, editor);
-	if (!isSameRoom(previousRoom, activeRoomContext)) {
+	const roomChanged = !isSameRoom(previousRoom, activeRoomContext);
+	if (roomChanged) {
 		if (desiredPresence) {
 			logger.debug(
 				`lineheat: presence:desired:clear reason=active-room-changed previous=${formatPresenceState(desiredPresence)}`,
@@ -612,6 +699,11 @@ const updateActiveEditorState = async (
 	syncRoomsWithSocket(logger);
 	await updateDesiredPresenceFromEditor(editor, logger);
 	syncPresenceWithSocket(logger);
+
+	// Notify user if they moved to a file with other presence or recent activity
+	if (roomChanged && activeRoomKey) {
+		maybeNotifyPresenceConflict(activeRoomKey, logger);
+	}
 };
 
 const ensurePresenceKeepalive = (logger: LineHeatLogger) => {
@@ -826,6 +918,7 @@ export function deactivate() {
 	activePresence = undefined;
 	roomStateByKey.clear();
 	roomKeyByHashedKey.clear();
+	lastNotificationTimeByRoom.clear();
 	resetSymbolState();
 	if (presenceKeepaliveTimer) {
 		clearInterval(presenceKeepaliveTimer);
