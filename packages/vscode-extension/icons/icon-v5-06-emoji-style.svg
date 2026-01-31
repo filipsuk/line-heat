@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Emoji-style three-pointed flame -->
+  <rect width="128" height="128" rx="20" fill="#1E1E2E"/>
+
+  <!-- Main flame - emoji style curves -->
+  <path d="M64 118 C34 118 18 92 18 68 C18 52 26 40 36 28 C40 22 42 14 44 8 C50 16 48 28 52 36 C54 28 58 16 64 6 C70 16 74 28 76 36 C80 28 78 16 84 8 C86 14 88 22 92 28 C102 40 110 52 110 68 C110 92 94 118 64 118 Z" fill="#E86A5A"/>
+
+  <!-- Inner yellow core -->
+  <path d="M64 110 C44 110 32 90 32 72 C32 60 38 50 46 42 C50 50 50 58 54 62 C56 54 58 44 64 36 C70 44 72 54 74 62 C78 58 78 50 82 42 C90 50 96 60 96 72 C96 90 84 110 64 110 Z" fill="#F4B860"/>
+
+  <!-- Face -->
+  <circle cx="50" cy="78" r="5" fill="#1E1E2E"/>
+  <circle cx="78" cy="78" r="5" fill="#1E1E2E"/>
+  <circle cx="51" cy="77" r="1.5" fill="white"/>
+  <circle cx="79" cy="77" r="1.5" fill="white"/>
+  <path d="M54 92 Q64 100 74 92" stroke="#1E1E2E" stroke-width="3" fill="none" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Three-pointed flame - taller center -->
+  <rect width="128" height="128" rx="20" fill="#1E1E2E"/>
+
+  <!-- Main flame with 3 points - center taller -->
+  <path d="M64 116 C38 116 24 94 24 72 C24 56 32 44 40 32 C44 26 46 18 50 10 C54 20 52 30 56 36 C60 26 62 12 66 4 C70 14 68 28 72 36 C76 28 74 18 78 10 C82 18 84 26 88 32 C96 44 104 56 104 72 C104 94 90 116 64 116 Z" fill="#E86A5A"/>
+
+  <!-- Inner yellow flame -->
+  <path d="M64 108 C46 108 36 90 36 74 C36 62 42 52 48 44 C52 50 50 58 54 64 C58 54 60 42 64 34 C68 44 66 56 70 64 C74 56 72 48 76 44 C82 52 88 62 88 74 C88 90 78 108 64 108 Z" fill="#F4B860"/>
+
+  <!-- Face -->
+  <circle cx="52" cy="78" r="5" fill="#1E1E2E"/>
+  <circle cx="76" cy="78" r="5" fill="#1E1E2E"/>
+  <circle cx="53" cy="77" r="1.5" fill="white"/>
+  <circle cx="77" cy="77" r="1.5" fill="white"/>
+  <path d="M56 92 Q64 98 72 92" stroke="#1E1E2E" stroke-width="3" fill="none" stroke-linecap="round"/>
+</svg>
