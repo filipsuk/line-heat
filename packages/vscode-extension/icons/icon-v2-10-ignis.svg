@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Ignis - rounded square flame, app icon style -->
+
+  <!-- Dark dev background -->
+  <rect width="128" height="128" rx="28" fill="#1E1E2E"/>
+
+  <!-- Outer glow ring -->
+  <circle cx="64" cy="64" r="50" fill="none" stroke="#FF6B35" stroke-width="4" opacity="0.3"/>
+
+  <!-- Main body - rounded square flame hybrid -->
+  <rect x="24" y="32" width="80" height="72" rx="20" fill="#FF6B35"/>
+
+  <!-- Top flame peaks -->
+  <path d="M36 32 L36 24 Q36 16 44 18 L44 32 Z" fill="#FF6B35"/>
+  <path d="M56 32 L56 16 Q56 6 68 8 L72 8 Q84 6 84 18 L84 32 Z" fill="#FF6B35"/>
+  <path d="M92 32 L92 20 Q92 14 100 18 L100 32 Z" fill="#FF6B35"/>
+
+  <!-- Inner layer -->
+  <rect x="34" y="40" width="60" height="56" rx="14" fill="#FF8C42"/>
+
+  <!-- Core -->
+  <rect x="44" y="48" width="40" height="40" rx="10" fill="#FFD93D"/>
+
+  <!-- Face - clean and minimal -->
+  <circle cx="54" cy="62" r="5" fill="#1E1E2E"/>
+  <circle cx="74" cy="62" r="5" fill="#1E1E2E"/>
+  <circle cx="55" cy="61" r="1.5" fill="white"/>
+  <circle cx="75" cy="61" r="1.5" fill="white"/>
+
+  <!-- Confident grin -->
+  <path d="M54 78 Q64 86 74 78" stroke="#1E1E2E" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+</svg>

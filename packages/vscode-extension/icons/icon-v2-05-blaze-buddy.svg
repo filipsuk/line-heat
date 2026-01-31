@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Blaze buddy - friendly but professional -->
+
+  <!-- Cream background -->
+  <rect width="128" height="128" rx="20" fill="#FFF8F0"/>
+
+  <!-- Body shadow -->
+  <ellipse cx="68" cy="92" rx="36" ry="12" fill="#E85D2B" opacity="0.2"/>
+
+  <!-- Round body -->
+  <circle cx="64" cy="64" r="48" fill="#FF6B35"/>
+
+  <!-- Body highlight -->
+  <circle cx="64" cy="64" r="38" fill="#FF8C42"/>
+
+  <!-- Belly/core -->
+  <circle cx="64" cy="68" r="26" fill="#FFB347"/>
+
+  <!-- Eyes - professional, focused look -->
+  <ellipse cx="48" cy="56" rx="10" ry="11" fill="white"/>
+  <ellipse cx="80" cy="56" rx="10" ry="11" fill="white"/>
+  <ellipse cx="50" cy="58" rx="5" ry="6" fill="#1a1a2e"/>
+  <ellipse cx="82" cy="58" rx="5" ry="6" fill="#1a1a2e"/>
+  <circle cx="51" cy="56" r="2" fill="white"/>
+  <circle cx="83" cy="56" r="2" fill="white"/>
+
+  <!-- Confident smile -->
+  <path d="M50 76 Q64 84 78 76" stroke="#1a1a2e" stroke-width="4" fill="none" stroke-linecap="round"/>
+
+  <!-- Small flame hair -->
+  <path d="M42 22 C40 14 48 10 50 18 L48 26 Z" fill="#FFD93D"/>
+  <path d="M60 16 C58 6 68 2 70 12 L66 22 Z" fill="#FFD93D"/>
+  <path d="M80 22 C78 14 86 10 88 18 L84 28 Z" fill="#FFD93D"/>
+</svg>

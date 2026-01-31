@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Hotspot - location pin style -->
+
+  <!-- Warm cream background -->
+  <rect width="128" height="128" rx="20" fill="#FFF4E6"/>
+
+  <!-- Shadow -->
+  <ellipse cx="64" cy="116" rx="24" ry="6" fill="#E85D2B" opacity="0.2"/>
+
+  <!-- Pin body -->
+  <path d="M64 118 L40 72 C28 56 28 36 44 22 C60 8 84 12 96 32 C104 46 100 62 88 76 Z" fill="#FF6B35"/>
+
+  <!-- Inner pin -->
+  <path d="M64 100 L48 68 C40 56 40 42 52 32 C64 22 80 26 88 40 C94 50 90 62 82 72 Z" fill="#FF8C42"/>
+
+  <!-- Circle cutout / face area -->
+  <circle cx="66" cy="48" r="24" fill="#FFD93D"/>
+
+  <!-- Face -->
+  <circle cx="58" cy="44" r="5" fill="#1a1a2e"/>
+  <circle cx="76" cy="44" r="5" fill="#1a1a2e"/>
+  <circle cx="59" cy="43" r="1.5" fill="white"/>
+  <circle cx="77" cy="43" r="1.5" fill="white"/>
+  <path d="M60 56 Q68 62 76 56" stroke="#1a1a2e" stroke-width="3" fill="none" stroke-linecap="round"/>
+
+  <!-- Heat waves -->
+  <path d="M24 48 Q20 42 24 36" stroke="#FF6B35" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.6"/>
+  <path d="M16 52 Q12 44 16 36" stroke="#FF6B35" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.4"/>
+  <path d="M104 48 Q108 42 104 36" stroke="#FF6B35" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.6"/>
+  <path d="M112 52 Q116 44 112 36" stroke="#FF6B35" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.4"/>
+</svg>

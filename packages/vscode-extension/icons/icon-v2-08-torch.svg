@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Torch character - tool-like mascot -->
+
+  <!-- Dark background -->
+  <rect width="128" height="128" rx="20" fill="#1a1a2e"/>
+
+  <!-- Torch handle -->
+  <rect x="52" y="70" width="24" height="48" rx="4" fill="#8B7355"/>
+  <rect x="56" y="74" width="16" height="40" rx="2" fill="#A08060"/>
+
+  <!-- Handle grip lines -->
+  <line x1="54" y1="82" x2="74" y2="82" stroke="#6B5344" stroke-width="2"/>
+  <line x1="54" y1="92" x2="74" y2="92" stroke="#6B5344" stroke-width="2"/>
+  <line x1="54" y1="102" x2="74" y2="102" stroke="#6B5344" stroke-width="2"/>
+
+  <!-- Flame -->
+  <path d="M64 72 C40 72 28 52 28 36 C28 20 44 8 64 4 C84 8 100 20 100 36 C100 52 88 72 64 72 Z" fill="#FF6B35"/>
+
+  <!-- Inner flame -->
+  <path d="M64 64 C48 64 40 50 40 38 C40 26 50 16 64 12 C78 16 88 26 88 38 C88 50 80 64 64 64 Z" fill="#FF8C42"/>
+
+  <!-- Core -->
+  <ellipse cx="64" cy="44" rx="18" ry="20" fill="#FFD93D"/>
+
+  <!-- Face -->
+  <circle cx="54" cy="40" r="5" fill="#1a1a2e"/>
+  <circle cx="74" cy="40" r="5" fill="#1a1a2e"/>
+  <circle cx="55" cy="39" r="1.5" fill="white"/>
+  <circle cx="75" cy="39" r="1.5" fill="white"/>
+  <path d="M56 52 Q64 58 72 52" stroke="#1a1a2e" stroke-width="3" fill="none" stroke-linecap="round"/>
+</svg>

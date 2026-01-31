@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Spark - energetic minimal mascot -->
+
+  <!-- Gradient orange background -->
+  <rect width="128" height="128" rx="20" fill="#FF8C42"/>
+
+  <!-- White container circle -->
+  <circle cx="64" cy="64" r="50" fill="white"/>
+
+  <!-- Spark body - angular flame shape -->
+  <path d="M64 14 L78 44 L108 54 L82 72 L88 104 L64 84 L40 104 L46 72 L20 54 L50 44 Z" fill="#FF6B35"/>
+
+  <!-- Inner spark -->
+  <path d="M64 32 L72 50 L90 56 L74 68 L78 88 L64 74 L50 88 L54 68 L38 56 L56 50 Z" fill="#FFB347"/>
+
+  <!-- Core -->
+  <circle cx="64" cy="62" r="14" fill="#FFD93D"/>
+
+  <!-- Simple determined face -->
+  <circle cx="58" cy="60" r="4" fill="#1a1a2e"/>
+  <circle cx="70" cy="60" r="4" fill="#1a1a2e"/>
+  <circle cx="59" cy="59" r="1.5" fill="white"/>
+  <circle cx="71" cy="59" r="1.5" fill="white"/>
+  <path d="M58 70 L70 70" stroke="#1a1a2e" stroke-width="3" stroke-linecap="round"/>
+</svg>

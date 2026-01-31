@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Code flame - developer focused, no face -->
+
+  <!-- Dark background -->
+  <rect width="128" height="128" rx="20" fill="#1a1a2e"/>
+
+  <!-- Outer flame glow -->
+  <path d="M64 112 C34 112 20 86 20 62 C20 38 38 18 64 8 C90 18 108 38 108 62 C108 86 94 112 64 112 Z" fill="#FF6B35"/>
+
+  <!-- Middle flame -->
+  <path d="M64 100 C42 100 32 80 32 60 C32 42 46 26 64 18 C82 26 96 42 96 60 C96 80 86 100 64 100 Z" fill="#FF8C42"/>
+
+  <!-- Inner flame -->
+  <path d="M64 88 C50 88 44 74 44 58 C44 46 52 36 64 30 C76 36 84 46 84 58 C84 74 78 88 64 88 Z" fill="#FFB347"/>
+
+  <!-- Code brackets inside -->
+  <path d="M46 52 L38 62 L46 72" stroke="#1a1a2e" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M82 52 L90 62 L82 72" stroke="#1a1a2e" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <!-- Slash -->
+  <line x1="72" y1="48" x2="56" y2="76" stroke="#1a1a2e" stroke-width="4" stroke-linecap="round"/>
+</svg>
