@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Background -->
+  <rect width="128" height="128" rx="16" fill="#2D1B4E"/>
+
+  <!-- Dragon body -->
+  <ellipse cx="64" cy="72" rx="32" ry="28" fill="#FF6B35"/>
+
+  <!-- Dragon head -->
+  <circle cx="64" cy="48" r="24" fill="#FF8C42"/>
+
+  <!-- Dragon snout -->
+  <ellipse cx="64" cy="56" rx="12" ry="8" fill="#FFAA5C"/>
+
+  <!-- Eyes -->
+  <ellipse cx="54" cy="44" rx="6" ry="7" fill="white"/>
+  <ellipse cx="74" cy="44" rx="6" ry="7" fill="white"/>
+  <circle cx="55" cy="45" r="3" fill="#1E1E2E"/>
+  <circle cx="75" cy="45" r="3" fill="#1E1E2E"/>
+  <circle cx="56" cy="44" r="1" fill="white"/>
+  <circle cx="76" cy="44" r="1" fill="white"/>
+
+  <!-- Nostrils -->
+  <circle cx="60" cy="56" r="2" fill="#E85D2B"/>
+  <circle cx="68" cy="56" r="2" fill="#E85D2B"/>
+
+  <!-- Small flames on head -->
+  <path d="M48 28 C46 22 50 18 52 24 C52 20 56 16 56 22 C58 18 62 20 60 26 L54 32 Z" fill="#FFD93D"/>
+  <path d="M68 28 C66 22 70 18 72 24 C72 20 76 16 76 22 C78 18 82 20 80 26 L74 32 Z" fill="#FFD93D"/>
+
+  <!-- Wings -->
+  <path d="M28 58 C18 48 22 38 32 42 L38 52 C32 48 28 52 32 58 Z" fill="#FF6B35"/>
+  <path d="M100 58 C110 48 106 38 96 42 L90 52 C96 48 100 52 96 58 Z" fill="#FF6B35"/>
+
+  <!-- Belly -->
+  <ellipse cx="64" cy="78" rx="18" ry="16" fill="#FFCC80"/>
+
+  <!-- Belly lines -->
+  <path d="M52 72 Q64 70 76 72" stroke="#FFB060" stroke-width="2" fill="none"/>
+  <path d="M54 78 Q64 76 74 78" stroke="#FFB060" stroke-width="2" fill="none"/>
+  <path d="M56 84 Q64 82 72 84" stroke="#FFB060" stroke-width="2" fill="none"/>
+
+  <!-- Feet -->
+  <ellipse cx="48" cy="98" rx="10" ry="6" fill="#E85D2B"/>
+  <ellipse cx="80" cy="98" rx="10" ry="6" fill="#E85D2B"/>
+
+  <!-- Tail flame -->
+  <path d="M96 80 C102 78 108 82 112 76 C110 84 116 88 110 92 C106 86 100 88 96 84 Z" fill="#FFD93D"/>
+</svg>

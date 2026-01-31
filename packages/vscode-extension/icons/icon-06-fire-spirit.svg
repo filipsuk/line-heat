@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="spiritBody" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#FF4500"/>
+      <stop offset="40%" stop-color="#FF6B35"/>
+      <stop offset="70%" stop-color="#FF8C42"/>
+      <stop offset="100%" stop-color="#FFD93D"/>
+    </linearGradient>
+    <linearGradient id="spiritGlow" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#FFEB99"/>
+      <stop offset="100%" stop-color="#FFFFFF"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="128" height="128" rx="16" fill="#2D1B4E"/>
+
+  <!-- Outer flame body -->
+  <path d="M64 108 C38 108 24 88 24 68 C24 48 38 32 46 24 C46 38 54 44 60 38 C54 52 60 58 70 52 C76 58 86 64 86 80 C86 94 78 108 64 108 Z" fill="url(#spiritBody)"/>
+
+  <!-- Inner glow -->
+  <path d="M64 100 C46 100 36 84 36 68 C36 54 46 42 52 36 C52 46 58 50 62 46 C58 56 62 60 68 56 C72 60 78 64 78 76 C78 88 72 100 64 100 Z" fill="#FF8C42" opacity="0.8"/>
+
+  <!-- Core glow -->
+  <ellipse cx="64" cy="75" rx="20" ry="22" fill="url(#spiritGlow)" opacity="0.6"/>
+
+  <!-- Cute face -->
+  <!-- Eyes -->
+  <ellipse cx="52" cy="65" rx="8" ry="10" fill="white"/>
+  <ellipse cx="76" cy="65" rx="8" ry="10" fill="white"/>
+  <circle cx="54" cy="67" r="4" fill="#2D1B4E"/>
+  <circle cx="78" cy="67" r="4" fill="#2D1B4E"/>
+  <circle cx="55" cy="66" r="1.5" fill="white"/>
+  <circle cx="79" cy="66" r="1.5" fill="white"/>
+
+  <!-- Blush -->
+  <ellipse cx="42" cy="75" rx="6" ry="4" fill="#FF6B9D" opacity="0.5"/>
+  <ellipse cx="86" cy="75" rx="6" ry="4" fill="#FF6B9D" opacity="0.5"/>
+
+  <!-- Smile -->
+  <path d="M56 82 Q64 90 72 82" stroke="#2D1B4E" stroke-width="3" fill="none" stroke-linecap="round"/>
+
+  <!-- Small floating flames/sparks -->
+  <ellipse cx="30" cy="45" rx="4" ry="6" fill="#FFD93D" opacity="0.8"/>
+  <ellipse cx="98" cy="50" rx="3" ry="5" fill="#FF8C42" opacity="0.8"/>
+  <ellipse cx="42" cy="25" rx="3" ry="4" fill="#FFEB99" opacity="0.7"/>
+  <ellipse cx="86" cy="30" rx="3" ry="5" fill="#FFD93D" opacity="0.7"/>
+
+  <!-- Sparkles -->
+  <circle cx="22" cy="58" r="2" fill="#FFEB99"/>
+  <circle cx="106" cy="62" r="2" fill="#FFEB99"/>
+  <circle cx="64" cy="18" r="2" fill="#FFD93D"/>
+</svg>

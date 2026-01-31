@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="heatGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#4A90D9"/>
+      <stop offset="33%" stop-color="#FFD93D"/>
+      <stop offset="66%" stop-color="#FF8C42"/>
+      <stop offset="100%" stop-color="#FF4500"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="128" height="128" rx="16" fill="#1E1E2E"/>
+
+  <!-- Thermometer body -->
+  <rect x="54" y="20" width="20" height="70" rx="10" fill="#3D3D5C"/>
+
+  <!-- Thermometer bulb -->
+  <circle cx="64" cy="98" r="18" fill="#3D3D5C"/>
+
+  <!-- Heat fill in thermometer -->
+  <rect x="58" y="35" width="12" height="55" fill="url(#heatGrad)"/>
+  <circle cx="64" cy="98" r="14" fill="#FF4500"/>
+
+  <!-- Temperature marks -->
+  <rect x="76" y="28" width="8" height="2" fill="#6C7086"/>
+  <rect x="76" y="40" width="8" height="2" fill="#6C7086"/>
+  <rect x="76" y="52" width="8" height="2" fill="#6C7086"/>
+  <rect x="76" y="64" width="8" height="2" fill="#6C7086"/>
+  <rect x="76" y="76" width="8" height="2" fill="#6C7086"/>
+
+  <!-- Code lines on left side -->
+  <rect x="18" y="30" width="24" height="4" rx="2" fill="#FF4500"/>
+  <rect x="22" y="42" width="18" height="4" rx="2" fill="#FF8C42"/>
+  <rect x="18" y="54" width="22" height="4" rx="2" fill="#FFD93D"/>
+  <rect x="24" y="66" width="16" height="4" rx="2" fill="#87CEEB"/>
+  <rect x="18" y="78" width="20" height="4" rx="2" fill="#4A90D9"/>
+
+  <!-- Code lines on right side -->
+  <rect x="92" y="30" width="18" height="4" rx="2" fill="#FF4500"/>
+  <rect x="88" y="42" width="22" height="4" rx="2" fill="#FF8C42"/>
+  <rect x="94" y="54" width="16" height="4" rx="2" fill="#FFD93D"/>
+  <rect x="90" y="66" width="20" height="4" rx="2" fill="#87CEEB"/>
+  <rect x="86" y="78" width="24" height="4" rx="2" fill="#4A90D9"/>
+
+  <!-- Glow effect -->
+  <circle cx="64" cy="98" r="20" fill="none" stroke="#FF4500" stroke-width="2" opacity="0.4"/>
+</svg>
