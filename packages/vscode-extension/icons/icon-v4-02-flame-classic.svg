@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Classic flame shape with flicker -->
+  <rect width="128" height="128" rx="20" fill="#1E1E2E"/>
+
+  <!-- Main flame -->
+  <path d="M64 6 C64 6 52 28 48 40 C42 56 32 64 32 80 C32 100 46 114 64 114 C82 114 96 100 96 80 C96 64 86 56 80 40 C76 28 64 6 64 6 Z" fill="#FF6B35"/>
+
+  <!-- Inner flame -->
+  <path d="M64 22 C64 22 54 40 52 50 C48 62 42 68 42 80 C42 94 52 104 64 104 C76 104 86 94 86 80 C86 68 80 62 76 50 C74 40 64 22 64 22 Z" fill="#FF8C42"/>
+
+  <!-- Core -->
+  <ellipse cx="64" cy="82" rx="16" ry="18" fill="#FFB347"/>
+
+  <!-- Highlight -->
+  <ellipse cx="52" cy="64" rx="10" ry="14" fill="#FFB347" opacity="0.7"/>
+
+  <!-- Face -->
+  <circle cx="52" cy="78" r="5" fill="#1E1E2E"/>
+  <circle cx="76" cy="78" r="5" fill="#1E1E2E"/>
+  <circle cx="53" cy="77" r="1.5" fill="white"/>
+  <circle cx="77" cy="77" r="1.5" fill="white"/>
+  <path d="M56 92 Q64 98 72 92" stroke="#1E1E2E" stroke-width="3" fill="none" stroke-linecap="round"/>
+</svg>

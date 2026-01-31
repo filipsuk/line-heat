@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Sharp angular flame -->
+  <rect width="128" height="128" rx="20" fill="#1E1E2E"/>
+
+  <!-- Main flame - sharper edges -->
+  <path d="M64 6 L44 44 L32 70 L36 100 L52 114 L76 114 L92 100 L96 70 L84 44 Z" fill="#FF6B35"/>
+
+  <!-- Inner flame -->
+  <path d="M64 22 L50 50 L42 72 L46 96 L56 106 L72 106 L82 96 L86 72 L78 50 Z" fill="#FF8C42"/>
+
+  <!-- Core -->
+  <ellipse cx="64" cy="82" rx="16" ry="18" fill="#FFB347"/>
+
+  <!-- Highlight -->
+  <ellipse cx="52" cy="62" rx="10" ry="14" fill="#FFD580" opacity="0.6"/>
+
+  <!-- Face -->
+  <circle cx="52" cy="78" r="5" fill="#1E1E2E"/>
+  <circle cx="76" cy="78" r="5" fill="#1E1E2E"/>
+  <circle cx="53" cy="77" r="1.5" fill="white"/>
+  <circle cx="77" cy="77" r="1.5" fill="white"/>
+  <path d="M56 92 Q64 98 72 92" stroke="#1E1E2E" stroke-width="3" fill="none" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Candle-like flame shape -->
+  <rect width="128" height="128" rx="20" fill="#1E1E2E"/>
+
+  <!-- Main flame - candle style, rounder at bottom -->
+  <path d="M64 8 C64 8 54 24 50 40 C44 62 40 78 46 94 C52 108 76 108 82 94 C88 78 84 62 78 40 C74 24 64 8 64 8 Z" fill="#FF6B35"/>
+
+  <!-- Inner flame -->
+  <path d="M64 22 C64 22 56 34 54 48 C50 66 48 78 52 90 C56 100 72 100 76 90 C80 78 78 66 74 48 C72 34 64 22 64 22 Z" fill="#FF8C42"/>
+
+  <!-- Core - elongated -->
+  <ellipse cx="64" cy="76" rx="14" ry="20" fill="#FFB347"/>
+
+  <!-- Highlight -->
+  <ellipse cx="56" cy="56" rx="8" ry="14" fill="#FFD580" opacity="0.65"/>
+
+  <!-- Face -->
+  <circle cx="54" cy="72" r="5" fill="#1E1E2E"/>
+  <circle cx="74" cy="72" r="5" fill="#1E1E2E"/>
+  <circle cx="55" cy="71" r="1.5" fill="white"/>
+  <circle cx="75" cy="71" r="1.5" fill="white"/>
+  <path d="M58 86 Q64 92 70 86" stroke="#1E1E2E" stroke-width="3" fill="none" stroke-linecap="round"/>
+</svg>

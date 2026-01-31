@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Flame with wispy top -->
+  <rect width="128" height="128" rx="20" fill="#1E1E2E"/>
+
+  <!-- Main flame with wispy curves -->
+  <path d="M64 114 C40 114 28 96 28 76 C28 56 38 44 44 32 C48 24 50 14 58 10 C62 18 56 28 60 36 C64 28 70 18 76 24 C80 30 74 40 78 48 C86 58 100 68 100 84 C100 100 86 114 64 114 Z" fill="#FF6B35"/>
+
+  <!-- Inner flame -->
+  <path d="M64 106 C46 106 38 92 38 76 C38 62 46 52 52 42 C56 36 58 28 64 26 C68 32 64 40 68 46 C74 52 86 62 86 78 C86 94 78 106 64 106 Z" fill="#FF8C42"/>
+
+  <!-- Core -->
+  <ellipse cx="64" cy="80" rx="18" ry="20" fill="#FFB347"/>
+
+  <!-- Highlight -->
+  <ellipse cx="52" cy="66" rx="10" ry="14" fill="#FFD580" opacity="0.6"/>
+
+  <!-- Face -->
+  <circle cx="52" cy="76" r="5" fill="#1E1E2E"/>
+  <circle cx="76" cy="76" r="5" fill="#1E1E2E"/>
+  <circle cx="53" cy="75" r="1.5" fill="white"/>
+  <circle cx="77" cy="75" r="1.5" fill="white"/>
+  <path d="M56 90 Q64 96 72 90" stroke="#1E1E2E" stroke-width="3" fill="none" stroke-linecap="round"/>
+</svg>

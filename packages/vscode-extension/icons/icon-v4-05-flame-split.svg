@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Flame with split tip -->
+  <rect width="128" height="128" rx="20" fill="#1E1E2E"/>
+
+  <!-- Main flame with forked top -->
+  <path d="M50 12 C46 20 42 32 40 44 C36 60 30 72 30 84 C30 100 44 114 64 114 C84 114 98 100 98 84 C98 72 92 60 88 44 C86 32 82 20 78 12 C74 22 70 18 64 28 C58 18 54 22 50 12 Z" fill="#FF6B35"/>
+
+  <!-- Inner flame -->
+  <path d="M54 28 C50 36 46 46 44 56 C40 68 38 76 38 86 C38 98 50 106 64 106 C78 106 90 98 90 86 C90 76 88 68 84 56 C82 46 78 36 74 28 C70 36 68 32 64 40 C60 32 58 36 54 28 Z" fill="#FF8C42"/>
+
+  <!-- Core -->
+  <ellipse cx="64" cy="82" rx="18" ry="20" fill="#FFB347"/>
+
+  <!-- Highlight -->
+  <ellipse cx="52" cy="68" rx="10" ry="14" fill="#FFD580" opacity="0.6"/>
+
+  <!-- Face -->
+  <circle cx="52" cy="78" r="5" fill="#1E1E2E"/>
+  <circle cx="76" cy="78" r="5" fill="#1E1E2E"/>
+  <circle cx="53" cy="77" r="1.5" fill="white"/>
+  <circle cx="77" cy="77" r="1.5" fill="white"/>
+  <path d="M56 92 Q64 98 72 92" stroke="#1E1E2E" stroke-width="3" fill="none" stroke-linecap="round"/>
+</svg>

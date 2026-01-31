@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Ember-like flame - rounder bottom, sharp top -->
+  <rect width="128" height="128" rx="20" fill="#1E1E2E"/>
+
+  <!-- Outer glow -->
+  <ellipse cx="64" cy="80" rx="48" ry="36" fill="#FF6B35" opacity="0.15"/>
+
+  <!-- Main flame -->
+  <path d="M64 12 C64 12 44 40 40 60 C34 86 42 106 64 110 C86 106 94 86 88 60 C84 40 64 12 64 12 Z" fill="#FF6B35"/>
+
+  <!-- Inner flame -->
+  <path d="M64 28 C64 28 50 50 48 66 C44 86 50 100 64 102 C78 100 84 86 80 66 C78 50 64 28 64 28 Z" fill="#FF8C42"/>
+
+  <!-- Core -->
+  <ellipse cx="64" cy="78" rx="18" ry="20" fill="#FFB347"/>
+
+  <!-- Highlight -->
+  <ellipse cx="54" cy="60" rx="10" ry="16" fill="#FFD580" opacity="0.7"/>
+
+  <!-- Face -->
+  <circle cx="52" cy="74" r="5" fill="#1E1E2E"/>
+  <circle cx="76" cy="74" r="5" fill="#1E1E2E"/>
+  <circle cx="53" cy="73" r="1.5" fill="white"/>
+  <circle cx="77" cy="73" r="1.5" fill="white"/>
+  <path d="M56 88 Q64 94 72 88" stroke="#1E1E2E" stroke-width="3" fill="none" stroke-linecap="round"/>
+</svg>
