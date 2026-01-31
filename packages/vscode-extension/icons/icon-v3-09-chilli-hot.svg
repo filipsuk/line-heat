@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Chilli - hot/angry variant with flames -->
+
+  <rect width="128" height="128" rx="20" fill="#2D1B1B"/>
+
+  <!-- Background flames -->
+  <path d="M20 110 C18 95 25 85 30 95 C28 85 35 80 38 90 C40 82 48 88 44 98 L32 112 Z" fill="#FF6B35" opacity="0.4"/>
+  <path d="M90 108 C88 94 95 86 100 94 C98 84 106 80 108 88 C112 82 118 86 114 96 L102 110 Z" fill="#FF6B35" opacity="0.4"/>
+
+  <!-- Stem -->
+  <path d="M58 26 C54 22 58 16 64 18 C70 16 74 22 70 26 L68 34 L60 34 Z" fill="#228B22"/>
+
+  <!-- Chilli body -->
+  <path d="M64 34 C44 34 32 50 28 74 C24 98 36 110 52 112 C68 114 82 104 88 78 C94 52 84 34 64 34 Z" fill="#DC143C"/>
+
+  <!-- Inner -->
+  <path d="M64 42 C50 42 42 54 38 74 C34 94 44 102 56 104 C68 106 76 98 80 78 C84 58 78 42 64 42 Z" fill="#FF3B3B"/>
+
+  <!-- Shine -->
+  <ellipse cx="48" cy="60" rx="8" ry="12" fill="#FF6B6B" opacity="0.6"/>
+
+  <!-- Angry eyes -->
+  <path d="M42 62 L52 66" stroke="#8B0000" stroke-width="3" stroke-linecap="round"/>
+  <path d="M82 58 L72 64" stroke="#8B0000" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="50" cy="72" r="5" fill="#8B0000"/>
+  <circle cx="72" cy="70" r="5" fill="#8B0000"/>
+  <circle cx="51" cy="71" r="1.5" fill="white"/>
+  <circle cx="73" cy="69" r="1.5" fill="white"/>
+
+  <!-- Determined grin -->
+  <path d="M50 88 Q62 94 74 86" stroke="#8B0000" stroke-width="3" fill="none" stroke-linecap="round"/>
+
+  <!-- Flame wisps from top -->
+  <path d="M54 26 C52 18 58 14 60 20 L58 28 Z" fill="#FF6B35"/>
+  <path d="M68 24 C66 16 72 12 74 18 L72 26 Z" fill="#FFD93D"/>
+</svg>

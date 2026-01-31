@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Chilli - orange habanero style -->
+
+  <rect width="128" height="128" rx="20" fill="#1E1E2E"/>
+
+  <!-- Stem -->
+  <path d="M60 24 C56 20 60 14 66 16 C72 14 76 20 72 24 L70 32 L62 32 Z" fill="#2E8B57"/>
+
+  <!-- Chilli body - rounder habanero shape -->
+  <ellipse cx="64" cy="72" rx="38" ry="40" fill="#FF6B35"/>
+
+  <!-- Inner -->
+  <ellipse cx="64" cy="72" rx="30" ry="32" fill="#FF8C42"/>
+
+  <!-- Highlight -->
+  <ellipse cx="50" cy="60" rx="12" ry="16" fill="#FFB347" opacity="0.7"/>
+
+  <!-- Face -->
+  <circle cx="50" cy="68" r="5" fill="#1E1E2E"/>
+  <circle cx="78" cy="68" r="5" fill="#1E1E2E"/>
+  <circle cx="51" cy="67" r="1.5" fill="white"/>
+  <circle cx="79" cy="67" r="1.5" fill="white"/>
+
+  <path d="M54 84 Q64 90 74 84" stroke="#1E1E2E" stroke-width="3" fill="none" stroke-linecap="round"/>
+
+  <!-- Heat sparkles -->
+  <circle cx="108" cy="50" r="3" fill="#FFD93D" opacity="0.7"/>
+  <circle cx="100" cy="38" r="2" fill="#FF8C42" opacity="0.6"/>
+  <circle cx="112" cy="64" r="2" fill="#FFD93D" opacity="0.5"/>
+</svg>

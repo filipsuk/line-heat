@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Chilli - upright centered -->
+
+  <rect width="128" height="128" rx="20" fill="#FEF3E2"/>
+
+  <!-- Stem -->
+  <path d="M58 16 C54 12 58 6 64 8 C70 6 74 12 70 16 L68 24 L60 24 Z" fill="#228B22"/>
+
+  <!-- Chilli body - more vertical -->
+  <path d="M64 24 C48 24 40 36 38 56 C36 76 40 96 48 108 C56 118 72 118 80 108 C88 96 92 76 90 56 C88 36 80 24 64 24 Z" fill="#DC143C"/>
+
+  <!-- Inner -->
+  <path d="M64 32 C52 32 46 42 44 58 C42 74 46 90 52 100 C58 108 70 108 76 100 C82 90 86 74 84 58 C82 42 76 32 64 32 Z" fill="#FF3B3B"/>
+
+  <!-- Shine -->
+  <ellipse cx="52" cy="52" rx="8" ry="16" fill="#FF6B6B" opacity="0.6"/>
+
+  <!-- Face -->
+  <circle cx="52" cy="66" r="5" fill="#8B0000"/>
+  <circle cx="76" cy="66" r="5" fill="#8B0000"/>
+  <circle cx="53" cy="65" r="1.5" fill="white"/>
+  <circle cx="77" cy="65" r="1.5" fill="white"/>
+
+  <path d="M56 80 Q64 88 72 80" stroke="#8B0000" stroke-width="3" fill="none" stroke-linecap="round"/>
+</svg>

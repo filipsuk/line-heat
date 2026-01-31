@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Heat Drop - winking variant -->
+
+  <rect width="128" height="128" rx="20" fill="#FEF3E2"/>
+
+  <!-- Drop shadow -->
+  <path d="M68 110 C96 110 106 86 106 66 C106 40 68 10 68 10 C68 10 30 40 30 66 C30 86 40 110 68 110 Z" fill="#E85D2B" opacity="0.2" transform="translate(-2, 2)"/>
+
+  <!-- Main drop -->
+  <path d="M64 108 C92 108 104 84 104 64 C104 38 64 8 64 8 C64 8 24 38 24 64 C24 84 36 108 64 108 Z" fill="#FF6B35"/>
+
+  <!-- Inner -->
+  <path d="M64 96 C84 96 92 78 92 62 C92 42 64 20 64 20 C64 20 36 42 36 62 C36 78 44 96 64 96 Z" fill="#FF8C42"/>
+
+  <!-- Highlight -->
+  <ellipse cx="50" cy="54" rx="12" ry="16" fill="#FFB347" opacity="0.85"/>
+
+  <!-- Open eye -->
+  <circle cx="50" cy="66" r="5" fill="#1a1a2e"/>
+  <circle cx="51" cy="65" r="1.5" fill="white"/>
+
+  <!-- Winking eye -->
+  <path d="M72 66 Q78 62 84 66" stroke="#1a1a2e" stroke-width="3" fill="none" stroke-linecap="round"/>
+
+  <!-- Smile -->
+  <path d="M54 80 Q64 88 74 80" stroke="#1a1a2e" stroke-width="3" fill="none" stroke-linecap="round"/>
+</svg>

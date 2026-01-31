@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Chilli - no face, pure graphic -->
+
+  <rect width="128" height="128" rx="20" fill="#FFF8F0"/>
+
+  <!-- Shadow -->
+  <ellipse cx="68" cy="112" rx="28" ry="6" fill="#8B0000" opacity="0.15"/>
+
+  <!-- Stem -->
+  <path d="M56 20 C52 16 56 10 64 12 C72 10 76 16 72 20 L70 30 L58 30 Z" fill="#228B22"/>
+  <ellipse cx="64" cy="30" rx="8" ry="4" fill="#2E8B57"/>
+
+  <!-- Chilli body -->
+  <path d="M64 30 C42 30 28 48 24 76 C20 104 34 114 54 116 C74 118 90 104 96 74 C102 44 86 30 64 30 Z" fill="#DC143C"/>
+
+  <!-- Inner highlight -->
+  <path d="M64 40 C48 40 38 54 34 76 C30 98 42 106 56 108 C70 110 82 100 86 76 C90 52 80 40 64 40 Z" fill="#FF3B3B"/>
+
+  <!-- Shine -->
+  <ellipse cx="46" cy="58" rx="10" ry="18" fill="#FF6B6B" opacity="0.6"/>
+  <ellipse cx="42" cy="50" rx="5" ry="8" fill="#FF8B8B" opacity="0.5"/>
+</svg>

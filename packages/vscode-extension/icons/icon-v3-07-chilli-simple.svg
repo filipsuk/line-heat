@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Chilli pepper - simple mascot -->
+
+  <rect width="128" height="128" rx="20" fill="#FEF3E2"/>
+
+  <!-- Shadow -->
+  <ellipse cx="68" cy="108" rx="30" ry="8" fill="#C41E3A" opacity="0.15"/>
+
+  <!-- Stem -->
+  <path d="M58 24 C54 20 58 14 64 16 C70 14 74 20 70 24 L68 32 L60 32 Z" fill="#228B22"/>
+
+  <!-- Chilli body -->
+  <path d="M64 32 C44 32 32 48 28 72 C24 96 36 108 52 110 C68 112 82 102 88 76 C94 50 84 32 64 32 Z" fill="#DC143C"/>
+
+  <!-- Inner highlight -->
+  <path d="M64 40 C50 40 42 52 38 72 C34 92 44 100 56 102 C68 104 76 96 80 76 C84 56 78 40 64 40 Z" fill="#FF3B3B"/>
+
+  <!-- Shine -->
+  <ellipse cx="48" cy="58" rx="8" ry="14" fill="#FF6B6B" opacity="0.7"/>
+
+  <!-- Face -->
+  <circle cx="50" cy="72" r="5" fill="#8B0000"/>
+  <circle cx="72" cy="68" r="5" fill="#8B0000"/>
+  <circle cx="51" cy="71" r="1.5" fill="white"/>
+  <circle cx="73" cy="67" r="1.5" fill="white"/>
+
+  <!-- Confident smirk -->
+  <path d="M52 86 Q62 92 72 84" stroke="#8B0000" stroke-width="3" fill="none" stroke-linecap="round"/>
+</svg>

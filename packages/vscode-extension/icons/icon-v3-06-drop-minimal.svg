@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Heat Drop - ultra minimal -->
+
+  <rect width="128" height="128" rx="20" fill="#1E1E2E"/>
+
+  <!-- Simple drop shape -->
+  <path d="M64 110 C94 110 106 84 106 62 C106 36 64 6 64 6 C64 6 22 36 22 62 C22 84 34 110 64 110 Z" fill="#FF6B35"/>
+
+  <!-- Single highlight -->
+  <ellipse cx="48" cy="50" rx="16" ry="22" fill="#FF8C42"/>
+
+  <!-- Minimal eyes - just dots -->
+  <circle cx="48" cy="66" r="4" fill="#1E1E2E"/>
+  <circle cx="76" cy="66" r="4" fill="#1E1E2E"/>
+
+  <!-- Simple line smile -->
+  <path d="M54 80 Q64 86 74 80" stroke="#1E1E2E" stroke-width="3" fill="none" stroke-linecap="round"/>
+</svg>

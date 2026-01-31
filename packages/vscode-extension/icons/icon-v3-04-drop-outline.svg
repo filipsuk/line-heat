@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Heat Drop - with outline ring -->
+
+  <rect width="128" height="128" rx="20" fill="#FFF8F0"/>
+
+  <!-- Outer ring -->
+  <circle cx="64" cy="64" r="56" fill="none" stroke="#FF6B35" stroke-width="3" opacity="0.3"/>
+
+  <!-- Drop shadow -->
+  <path d="M67 106 C94 106 104 84 104 66 C104 42 67 14 67 14 C67 14 30 42 30 66 C30 84 40 106 67 106 Z" fill="#E85D2B" opacity="0.15" transform="translate(-2, 2)"/>
+
+  <!-- Main drop -->
+  <path d="M64 104 C90 104 102 82 102 64 C102 40 64 12 64 12 C64 12 26 40 26 64 C26 82 38 104 64 104 Z" fill="#FF6B35"/>
+
+  <!-- Inner -->
+  <path d="M64 94 C82 94 92 76 92 62 C92 44 64 22 64 22 C64 22 36 44 36 62 C36 76 46 94 64 94 Z" fill="#FF8C42"/>
+
+  <!-- Highlight -->
+  <ellipse cx="50" cy="54" rx="12" ry="16" fill="#FFB347" opacity="0.85"/>
+
+  <!-- Face -->
+  <circle cx="50" cy="66" r="5" fill="#1a1a2e"/>
+  <circle cx="78" cy="66" r="5" fill="#1a1a2e"/>
+  <circle cx="51" cy="65" r="1.5" fill="white"/>
+  <circle cx="79" cy="65" r="1.5" fill="white"/>
+  <path d="M56 80 Q64 86 72 80" stroke="#1a1a2e" stroke-width="3" fill="none" stroke-linecap="round"/>
+</svg>
