@@ -40,6 +40,7 @@ jobs:
         run: npm run compile -w lineheat-vscode
 
       # Publish to VS Code Marketplace (pre-release channel with --pre-release flag)
+      # --no-dependencies: protocol is bundled via esbuild, skip workspace deps
       - name: Publish to Marketplace
-        run: npx @vscode/vsce publish --pre-release -p ${{ secrets.VSCE_PAT }}
+        run: npx @vscode/vsce publish --pre-release --no-dependencies -p ${{ secrets.VSCE_PAT }}
         working-directory: packages/vscode-extension
