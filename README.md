@@ -141,4 +141,4 @@ VS Code Marketplace versioning follows [the recommended scheme](https://code.vis
 
 ## License
 
-TBD (likely permissive open-source license).
+MIT
