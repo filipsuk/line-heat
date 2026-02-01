@@ -1,5 +1,9 @@
 # LineHeat
 
+<p align="center">
+  <img src="packages/vscode-extension/icon.svg" alt="LineHeat Logo" width="128" height="128">
+</p>
+
 **LineHeat** is an IDE plugin that visualizes **live code activity** across your team by overlaying a heatmap directly on source lines.
 
 It answers a simple question in real time:
