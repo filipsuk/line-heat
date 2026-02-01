@@ -121,6 +121,17 @@ docker run -e LINEHEAT_TOKEN=... -e LINEHEAT_RETENTION_DAYS=7 -e LINEHEAT_DB_PAT
 docker exec -it <container> sqlite3 /data/lineheat.sqlite '.tables'
 ```
 
+## Releasing
+
+VS Code Marketplace versioning follows [the recommended scheme](https://code.visualstudio.com/api/working-with-extensions/publishing-extension#prerelease-extensions):
+
+| Channel | Minor version | Tag example | package.json version |
+|---------|---------------|-------------|---------------------|
+| Pre-release | Odd (1, 3, 5...) | `v0.1.0-pre` | `0.1.0` |
+| Stable | Even (2, 4, 6...) | `v0.2.0` | `0.2.0` |
+
+**Important**: The `package.json` version must always be `major.minor.patch` format (no `-pre` suffix). The `-pre` suffix is only used in git tags to trigger the pre-release workflow.
+
 ## Planned Roadmap
 
 - [ ] VS Code plugin (first target)
