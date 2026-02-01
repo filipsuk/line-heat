@@ -1,4 +1,4 @@
-# Releasing to VS Code Marketplace
+# Releasing
 
 This extension follows the [VS Code recommended versioning scheme](https://code.visualstudio.com/api/working-with-extensions/publishing-extension#prerelease-extensions):
 
@@ -6,6 +6,15 @@ This extension follows the [VS Code recommended versioning scheme](https://code.
 |-------------|------------------|-----------------|
 | Pre-release | Odd (1, 3, 5...) | `0.1.0`, `0.3.0` |
 | Stable      | Even (2, 4, 6...)| `0.2.0`, `0.4.0` |
+
+When you push a tag, the following workflows run:
+
+| Tag pattern | Workflows triggered |
+|-------------|---------------------|
+| `v*-pre*` | `publish-marketplace-prerelease.yml` + `release-vsix.yml` |
+| `v0.2.0` | `publish-marketplace-stable.yml` + `release-vsix.yml` |
+
+Both create a GitHub release with the VSIX attached. Pre-release tags are marked as pre-release in GitHub.
 
 ## Pre-release
 
