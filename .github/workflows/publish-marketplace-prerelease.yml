@@ -1,8 +1,14 @@
 name: Publish to VS Code Marketplace (Pre-release)
 
+# Versioning follows VS Code Marketplace recommendation:
+# - Stable releases: v0.2.x, v0.4.x (even minor numbers)
+# - Pre-release: v0.1.x, v0.3.x (odd minor numbers) with -pre suffix in tags
+# Package.json version must always be major.minor.patch (no -pre suffix)
+
 on:
   push:
     tags:
+      # Match tags like v0.1.0-pre, v0.3.1-pre.2
       - 'v*-pre*'
 
 permissions:
