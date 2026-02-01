@@ -1,9 +1,9 @@
 {
-  "name": "vscode-extension",
+  "name": "lineheat-vscode",
   "displayName": "Line Heat",
-  "description": "Visualize live code activity with a decaying heatmap overlay",
+  "description": "Prevent code conflicts even before you committ",
   "version": "0.0.1",
-  "publisher": "lineheat",
+  "publisher": "filipsuk",
   "icon": "icon.png",
   "license": "MIT",
   "repository": {
