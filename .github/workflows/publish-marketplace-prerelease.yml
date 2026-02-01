@@ -31,7 +31,7 @@ jobs:
 
       # Build the VS Code extension
       - name: Build extension
-        run: npm run compile -w vscode-extension
+        run: npm run compile -w lineheat-vscode
 
       # Publish to VS Code Marketplace (pre-release channel with --pre-release flag)
       - name: Publish to Marketplace

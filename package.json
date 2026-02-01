@@ -5,8 +5,8 @@
     "packages/*"
   ],
   "scripts": {
-    "test": "npm test -w @line-heat/server && npm test -w vscode-extension",
-    "build": "npm run build -w @line-heat/protocol && npm run build -w @line-heat/server && npm run compile -w vscode-extension",
-    "vsix": "npm run vsix -w vscode-extension"
+    "test": "npm test -w @line-heat/server && npm test -w lineheat-vscode",
+    "build": "npm run build -w @line-heat/protocol && npm run build -w @line-heat/server && npm run compile -w lineheat-vscode",
+    "vsix": "npm run vsix -w lineheat-vscode"
   }
 }
