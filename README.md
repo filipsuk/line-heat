@@ -134,11 +134,7 @@ VS Code Marketplace versioning follows [the recommended scheme](https://code.vis
 
 ## Planned Roadmap
 
-- [ ] VS Code plugin (first target)
-- [ ] Heat decay + intensity tuning
-- [ ] File-level overview
-- [ ] Opt-in team sync
-- [ ] Privacy and scope controls
+- [x] VS Code plugin (first target)
 - [ ] JetBrains IDE support
 
 ---
