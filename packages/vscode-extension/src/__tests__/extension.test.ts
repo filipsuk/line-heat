@@ -695,9 +695,8 @@ suite('Line Heat Extension', function () {
 					const result = await vscode.commands.executeCommand('vscode.executeCodeLensProvider', fileUri);
 					const lenses = result as vscode.CodeLens[];
 					const titles = lenses
-						.filter((lens) => lens.command?.command === 'lineheat.showHeatDetails')
 						.map((lens) => lens.command?.title)
-						.filter((title): title is string => Boolean(title));
+						.filter((title): title is string => Boolean(title) && (title.includes('edit:') || title.includes('live:')));
 					const hasOther = titles.some((title) => title.includes('edit:') && title.includes('🦄 Alice'));
 					const hasSelf = titles.some((title) => title.includes('😎 Me'));
 					return hasOther && !hasSelf;
@@ -782,7 +781,10 @@ suite('Line Heat Extension', function () {
 					const result = await vscode.commands.executeCommand('vscode.executeCodeLensProvider', fileUri);
 					const lenses = result as vscode.CodeLens[];
 					const lineHeatLenses = lenses.filter(
-						(lens) => lens.command?.command === 'lineheat.showHeatDetails',
+						(lens) => {
+							const title = lens.command?.title ?? '';
+							return title.includes('edit:') || title.includes('live:');
+						},
 					);
 					return lineHeatLenses.length === 0;
 				}, 8000);
@@ -1166,7 +1168,10 @@ suite('Line Heat Extension', function () {
 					const result = await vscode.commands.executeCommand('vscode.executeCodeLensProvider', fileUri);
 					const lenses = result as vscode.CodeLens[];
 					const heatLens = lenses.find(
-						(lens) => lens.command?.command === 'lineheat.showHeatDetails',
+						(lens) => {
+							const title = lens.command?.title ?? '';
+							return title.includes('edit:') || title.includes('live:');
+						},
 					);
 					if (!heatLens) {
 						return false;
