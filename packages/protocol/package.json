@@ -1,0 +1,22 @@
+{
+  "name": "@line-heat/protocol",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/cjs/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/cjs/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    }
+  },
+  "scripts": {
+    "build": "npm run build:esm && npm run build:cjs && npm run build:cjs:pkg",
+    "build:esm": "tsc -p tsconfig.esm.json",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:cjs:pkg": "node -e \"const fs = require('fs'); const path = require('path'); fs.mkdirSync('dist/cjs', { recursive: true }); fs.writeFileSync('dist/cjs/package.json', '{\\\"type\\\":\\\"commonjs\\\"}'); if (fs.existsSync('dist/types')) { const dtsFiles = fs.readdirSync('dist/types').filter(f => f.endsWith('.d.ts')); dtsFiles.forEach(file => { fs.copyFileSync(path.join('dist/types', file), path.join('dist/cjs', file)); }); }\""
+  }
+}

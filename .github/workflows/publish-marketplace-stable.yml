@@ -1,0 +1,51 @@
+name: Publish to VS Code Marketplace & Open VSX (Stable)
+
+# Versioning follows VS Code Marketplace recommendation:
+# - Stable releases: v0.2.x, v0.4.x (even minor numbers)
+# - Pre-release: v0.1.x, v0.3.x (odd minor numbers) with -pre suffix in tags
+# Package.json version must always be major.minor.patch (no -pre suffix)
+
+on:
+  push:
+    tags:
+      # Match tags like v0.2.0, v1.4.5 - but NOT v0.1.0-pre or v0.1.0-pre.1
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout the repository at the tagged commit
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Setup Node.js 22 with npm cache for faster installs
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Install all project dependencies
+      - name: Install dependencies
+        run: npm ci
+
+      # Build the VS Code extension
+      - name: Build extension
+        run: npm run compile -w vscode-extension
+
+      # Publish to VS Code Marketplace (stable channel, no pre-release flag)
+      # --no-dependencies: protocol is bundled via esbuild, skip workspace deps
+      - name: Publish to VS Code Marketplace
+        run: npx @vscode/vsce publish --no-dependencies -p ${{ secrets.VSCE_PAT }}
+        working-directory: packages/vscode-extension
+
+      # Publish to Open VSX Registry
+      - name: Publish to Open VSX
+        run: npx ovsx publish --no-dependencies -p ${{ secrets.OVSX_PAT }}
+        working-directory: packages/vscode-extension

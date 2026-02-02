@@ -1,0 +1,3 @@
+- [] Do not update the edit time "Xs ago" so often. Just when some new data comes from the server. Use "now" if less than a minute. Then update the time max 1 times a minute.
+- [] Hash all things coming to the server which could expose exact repo name or filename or function name. Server should not need to know and client should be able to compare with hashes he can create locally to match data from server.
+- [] When I see a function as edited by someone else and I also edit it, the timer should not reset and I should still see how long ago it was edited by someone else. This will probably require protocol (and server logic) change so last edit time is stored by user id not per whole section. Its ok to do a breaking change in the protocol.

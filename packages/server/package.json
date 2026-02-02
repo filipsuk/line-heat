@@ -1,0 +1,26 @@
+{
+  "name": "@line-heat/server",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "LINEHEAT_TOKEN=devtoken tsx src/index.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/index.js",
+    "pretest": "npm run build -w @line-heat/protocol",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@line-heat/protocol": "0.0.0",
+    "better-sqlite3": "^11.10.0",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/better-sqlite3": "^7.6.13",
+    "socket.io-client": "^4.8.1",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

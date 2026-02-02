@@ -1,0 +1,12 @@
+{
+  "name": "line-heat",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "npm test -w @line-heat/server && npm test -w lineheat-vscode",
+    "build": "npm run build -w @line-heat/protocol && npm run build -w @line-heat/server && npm run compile -w lineheat-vscode",
+    "vsix": "npm run vsix -w lineheat-vscode"
+  }
+}

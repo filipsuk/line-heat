@@ -1,0 +1,17 @@
+node_modules/
+.DS_Store
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+out/
+dist/
+.vscode-test/
+.vscode-test-artifacts/
+*.vsix
+
+.sisyphus/
+
+# Local LineHeat data (sqlite, etc)
+.lineheat/

@@ -1,0 +1,112 @@
+{
+  "name": "lineheat-vscode",
+  "displayName": "Line Heat",
+  "description": "Prevent code conflicts even before you committ",
+  "version": "0.1.2",
+  "publisher": "filipsuk",
+  "icon": "icon.png",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/filipsuk/line-heat.git"
+  },
+  "engines": {
+    "vscode": "^1.105.1"
+  },
+  "categories": [
+    "Visualization"
+  ],
+  "files": [
+    "out/extension.js",
+    "icon.png",
+    "LICENSE.md",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "LineHeat",
+      "properties": {
+        "lineheat.serverUrl": {
+          "type": "string",
+          "default": "https://lineheat.filipsuk.cz:8787",
+          "description": "LineHeat server URL."
+        },
+        "lineheat.token": {
+          "type": "string",
+          "default": "",
+          "description": "Shared team token for LineHeat."
+        },
+        "lineheat.displayName": {
+          "type": "string",
+          "default": "",
+          "description": "Display name shared with teammates."
+        },
+        "lineheat.emoji": {
+          "type": "string",
+          "default": "🙂",
+          "description": "Emoji shown next to your name."
+        },
+        "lineheat.heatDecayHours": {
+          "type": "number",
+          "default": 72,
+          "minimum": 1,
+          "description": "Hours before heat fully decays."
+        },
+        "lineheat.logLevel": {
+          "type": "string",
+          "default": "info",
+          "enum": [
+            "error",
+            "warn",
+            "info",
+            "debug"
+          ],
+          "description": "LineHeat log verbosity."
+        },
+        "lineheat.presenceNotificationCooldownMinutes": {
+          "type": "number",
+          "default": 15,
+          "minimum": 0,
+          "description": "Minimum time (in minutes) between presence conflict notifications for the same file. Set to 0 to disable notifications."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build:protocol": "npm run build -w @line-heat/protocol",
+    "bundle": "node ./esbuild.mjs",
+    "bundle:production": "node ./esbuild.mjs --production",
+    "check-types": "tsc --noEmit -p ./",
+    "compile": "npm run build:protocol && npm run check-types && npm run bundle",
+    "compile-tests": "npm run build:protocol && tsc -p ./",
+    "package": "npm run build:protocol && npm run check-types && npm run bundle:production",
+    "vscode:prepublish": "npm run package",
+    "vsix": "npm exec --yes @vscode/vsce package -- --no-dependencies",
+    "watch": "node ./esbuild.mjs --watch",
+    "watch:tsc": "tsc --noEmit --watch -p ./",
+    "pretest": "npm run compile-tests && npm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@line-heat/protocol": "0.0.0",
+    "@types/vscode": "^1.105.1",
+    "@types/ws": "^8.18.1",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
+    "esbuild": "^0.25.10",
+    "socket.io-client": "^4.8.1",
+    "socket.io": "^4.8.1",
+    "typescript-eslint": "^8.52.0",
+    "eslint": "^9.39.2",
+    "typescript": "^5.9.3",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2"
+  }
+}
