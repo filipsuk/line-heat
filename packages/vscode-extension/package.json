@@ -2,7 +2,7 @@
   "name": "lineheat-vscode",
   "displayName": "Line Heat",
   "description": "Prevent code conflicts even before you committ",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "filipsuk",
   "icon": "icon.png",
   "license": "MIT",
@@ -33,7 +33,7 @@
       "properties": {
         "lineheat.serverUrl": {
           "type": "string",
-          "default": "",
+          "default": "https://lineheat.filipsuk.cz:8787",
           "description": "LineHeat server URL."
         },
         "lineheat.token": {
