@@ -1,4 +1,4 @@
-name: Publish to VS Code Marketplace (Pre-release)
+name: Publish to VS Code Marketplace & Open VSX (Pre-release)
 
 # Versioning follows VS Code Marketplace recommendation:
 # - Stable releases: v0.2.x, v0.4.x (even minor numbers)
@@ -41,6 +41,12 @@ jobs:
 
       # Publish to VS Code Marketplace (pre-release channel with --pre-release flag)
       # --no-dependencies: protocol is bundled via esbuild, skip workspace deps
-      - name: Publish to Marketplace
+      - name: Publish to VS Code Marketplace
         run: npx @vscode/vsce publish --pre-release --no-dependencies -p ${{ secrets.VSCE_PAT }}
+        working-directory: packages/vscode-extension
+
+      # Publish to Open VSX Registry
+      # Note: Open VSX does not support pre-release channels, publishes as regular version
+      - name: Publish to Open VSX
+        run: npx ovsx publish --no-dependencies -p ${{ secrets.OVSX_PAT }}
         working-directory: packages/vscode-extension
