@@ -696,7 +696,7 @@ suite('Line Heat Extension', function () {
 					const lenses = result as vscode.CodeLens[];
 					const titles = lenses
 						.map((lens) => lens.command?.title)
-						.filter((title): title is string => Boolean(title) && (title.includes('edit:') || title.includes('live:')));
+						.filter((title): title is string => typeof title === 'string' && (title.includes('edit:') || title.includes('live:')));
 					const hasOther = titles.some((title) => title.includes('edit:') && title.includes('🦄 Alice'));
 					const hasSelf = titles.some((title) => title.includes('😎 Me'));
 					return hasOther && !hasSelf;
