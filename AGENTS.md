@@ -1,16 +1,32 @@
 # AGENTS
 
 ## Commands
-- No build, lint, or test tooling detected yet.
-- TODO: document repo-specific commands when tooling is added.
-- TODO: include single-test commands for the chosen test runner.
+
+### VSCode Extension (`packages/vscode-extension`)
+- `npm run compile-tests` - compile TypeScript (includes protocol build)
+- `npm run lint` - run ESLint
+- `npm test` - run full test suite (requires VSCode download)
+- `npx mocha 'out/__tests__/unit/**/*.test.js'` - run unit tests only (no VSCode needed)
 
 ## Testing and Definition of Done
-- Always use TDD: write tests first, then implement.
-- Always add tests for new behavior and bug fixes.
-- Add e2e tests when feasible (for example, VS Code extension flows).
-- Use `__tests__` folder naming for test locations.
-- Definition of done: all tests pass locally.
+
+### TDD Workflow (mandatory)
+1. **Write failing tests first** - create tests that fail because the feature doesn't exist yet
+2. **Implement the feature** - write minimal code to make tests pass
+3. **Run tests until green** - you are done only when all tests pass
+4. **Refactor if needed** - clean up while keeping tests green
+
+### Test Organization
+- Use `__tests__` folder for test files
+- Use `__tests__/unit/` for pure unit tests (no VSCode dependencies)
+- Use `*.test.ts` naming convention
+- Unit tests should be runnable with mocha directly (faster feedback)
+
+### Definition of Done
+- All unit tests pass (`npx mocha 'out/__tests__/unit/**/*.test.js'`)
+- Code compiles without errors (`npm run compile-tests`)
+- Lint passes (`npm run lint`)
+- Implementation matches the approved plan
 
 ## Architecture and Complexity
 - Keep solutions simple; avoid unnecessary complexity.
