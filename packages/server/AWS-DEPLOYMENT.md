@@ -14,15 +14,6 @@ aws ec2 run-instances \
   --key-name your-key-pair \
   --security-group-ids sg-xxxxxxxxx \
   --subnet-id subnet-xxxxxxxxx \
-  --user-data "$(cat <<EOF
-#!/bin/bash
-apt-get update
-apt-get install -y docker.io
-systemctl start docker
-systemctl enable docker
-usermod -aG docker ubuntu
-EOF
-)"
 ```
 
 Or use the AWS Console:
@@ -36,6 +27,44 @@ Or use the AWS Console:
 SSH into your instance and run:
 
 ```bash
+# Install docker and git
+# For Amazon Linux 2023
+sudo yum update -y
+sudo yum install -y docker git
+sudo systemctl start docker
+sudo systemctl enable docker
+sudo usermod -a -G docker ec2-user
+
+# For Ubuntu
+sudo apt update
+sudo apt install -y docker.io git
+sudo systemctl start docker
+sudo systemctl enable docker
+sudo usermod -a -G docker ubuntu
+
+# Log out and back in for group changes to take effect
+
+# Generate SSH key on EC2
+ssh-keygen -t ed25519 -C "your-email@example.com" -f ~/.ssh/github_deploy_key
+
+# Display public key
+cat ~/.ssh/github_deploy_key.pub
+
+# Add this public key to your GitHub repo:
+#  Go to your repo → Settings → Deploy keys → Add deploy key
+#  Paste the public key, give it read access
+
+# Create/edit ~/.ssh/config
+cat > ~/.ssh/config << 'EOF'
+Host github.com
+    HostName github.com
+    IdentityFile ~/.ssh/github_deploy_key
+    StrictHostKeyChecking no
+EOF
+
+chmod 600 ~/.ssh/config
+
+
 # Clone and build
 git clone https://github.com/your-org/line-heat.git
 cd line-heat
@@ -44,124 +73,118 @@ cd line-heat
 docker build -t lineheat-server -f packages/server/Dockerfile .
 
 # Run with persistent data
-mkdir -p /data
+mkdir -p ./data
 docker run -d \
   --name lineheat-server \
   --restart unless-stopped \
   -e LINEHEAT_TOKEN=your-secure-token-here \
   -e LINEHEAT_RETENTION_DAYS=7 \
   -e LINEHEAT_DB_PATH=/data/lineheat.sqlite \
-  -v /data:/data \
-  -p 8787:8787 \
+  -v ./data:/data \
+  -p 127.0.0.1:3000:8787 \
   lineheat-server
 ```
+
+**Note:** We bind Docker to `127.0.0.1:3000` (localhost only) so it's not directly accessible from the internet. Nginx will handle SSL and proxy requests to it.
+
 
 ### 3. Configure Security Group
 
 In AWS Console, edit your security group to allow:
 - **Port 8787** from your team's IP ranges (or 0.0.0.0/0 for public access)
+- **80** (HTTP - for Let's Encrypt)
 - **Port 22** for SSH access
 
 Your LineHeat server is now available at `http://YOUR_EC2_IP:8787`
 
----
+### 4. Set Up HTTPS with Nginx
 
-## Production Option: ECS with Fargate
-
-For production use, ECS provides better scaling, monitoring, and managed infrastructure.
-
-### 1. Create ECR Repository
-
+**Create Nginx configuration (temporary, for certificate):**
 ```bash
-aws ecr create-repository --repository-name lineheat-server
-
-# Authenticate Docker with ECR
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <account-id>.dkr.ecr.us-east-1.amazonaws.com
-
-# Build and push
-docker build -t lineheat-server -f packages/server/Dockerfile .
-docker tag lineheat-server:latest <account-id>.dkr.ecr.us-east-1.amazonaws.com/lineheat-server:latest
-docker push <account-id>.dkr.ecr.us-east-1.amazonaws.com/lineheat-server:latest
-```
-
-### 2. Create ECS Task Definition
-
-Save as `ecs-task-definition.json`:
-
-```json
-{
-  "family": "lineheat-server",
-  "networkMode": "awsvpc",
-  "requiresCompatibilities": ["FARGATE"],
-  "cpu": "256",
-  "memory": "512",
-  "executionRoleArn": "arn:aws:iam::<account-id>:role/ecsTaskExecutionRole",
-  "containerDefinitions": [
-    {
-      "name": "lineheat-server",
-      "image": "<account-id>.dkr.ecr.us-east-1.amazonaws.com/lineheat-server:latest",
-      "portMappings": [
-        {
-          "containerPort": 8787,
-          "protocol": "tcp"
-        }
-      ],
-      "environment": [
-        {
-          "name": "LINEHEAT_TOKEN",
-          "value": "your-secure-token-here"
-        },
-        {
-          "name": "LINEHEAT_RETENTION_DAYS",
-          "value": "7"
-        }
-      ],
-      "logConfiguration": {
-        "logDriver": "awslogs",
-        "options": {
-          "awslogs-group": "/ecs/lineheat-server",
-          "awslogs-region": "us-east-1",
-          "awslogs-stream-prefix": "ecs"
-        }
-      }
+sudo tee /etc/nginx/conf.d/lineheat.conf > /dev/null << 'EOF'
+server {
+    listen 80;
+    server_name api.yourdomain.com;
+    
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
     }
-  ]
+    
+    location / {
+        return 200 "Server is running, SSL setup in progress";
+        add_header Content-Type text/plain;
+    }
 }
+EOF
+
+# Create webroot directory
+sudo mkdir -p /var/www/html
+
+# Test and start Nginx
+sudo nginx -t
+sudo systemctl start nginx
+sudo systemctl enable nginx
 ```
 
-### 3. Create ECS Service
-
+**Get SSL certificate from Let's Encrypt:**
 ```bash
-# Create task definition
-aws ecs register-task-definition --cli-input-json file://ecs-task-definition.json
-
-# Create service
-aws ecs create-service \
-  --cluster lineheat-cluster \
-  --service-name lineheat-server \
-  --task-definition lineheat-server \
-  --desired-count 1 \
-  --launch-type FARGATE \
-  --network-configuration "awsvpcConfiguration={subnets=[subnet-xxxxxxxxx],securityGroups=[sg-xxxxxxxxx],assignPublicIp=ENABLED}"
+sudo certbot certonly --webroot -w /var/www/html -d api.yourdomain.com
 ```
 
----
+Follow the prompts (enter email, agree to terms).
 
-## Advanced Option: App Runner
-
-For a fully managed serverless experience:
-
-### 1. Build and Push Container
-
-Same as ECS steps above, but use App Runner:
-
+**Update Nginx configuration with SSL:**
 ```bash
-aws apprunner create-service \
-  --service-name lineheat-server \
-  --source-configuration "ImageRepository={ImageIdentifier=<account-id>.dkr.ecr.us-east-1.amazonaws.com/lineheat-server:latest,ImageRepositoryType=ECR,AutoDeploymentsEnabled=true},AutoDeploymentsEnabled=true" \
-  --instance-configuration Cpu=256 Memory=512 \
-  --port 8787 \
-  --environment-variables "Key=LINEHEAT_TOKEN,Value=your-secure-token-here,Key=LINEHEAT_RETENTION_DAYS,Value=7"
+sudo tee /etc/nginx/conf.d/lineheat.conf > /dev/null << 'EOF'
+server {
+    listen 8787 ssl;
+    http2 on;
+    server_name api.yourdomain.com;
+
+    ssl_certificate /etc/letsencrypt/live/api.yourdomain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/api.yourdomain.com/privkey.pem;
+    
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+
+# Keep port 80 open for certificate renewal
+server {
+    listen 80;
+    server_name api.yourdomain.com;
+    
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+    
+    location / {
+        return 301 https://$host:8787$request_uri;
+    }
+}
+EOF
+
+# Reload Nginx
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+**SSL Certificate Auto-Renewal:**
+
+Let's Encrypt certificates expire every 90 days. Certbot automatically sets up a renewal cron job. Test it:
+```bash
+sudo certbot renew --dry-run
 ```
 
 ---
@@ -246,8 +269,6 @@ echo "0 2 * * * /backup.sh" | crontab -
 ```bash
 # Check logs
 docker logs lineheat-server
-# or for ECS
-aws logs get-log-events --log-group-name /ecs/lineheat-server --log-stream-prefix ecs
 ```
 
 **Connection refused:**
