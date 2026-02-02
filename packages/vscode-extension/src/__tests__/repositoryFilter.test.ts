@@ -40,6 +40,28 @@ suite('repository filtering', function () {
 			assert.strictEqual(isRepositoryEnabled('/home/user/personal/my-app', patterns), false);
 		});
 
+		test('matches glob pattern with ** at beginning and path after', () => {
+			const patterns = ['**/company/*'];
+			assert.strictEqual(isRepositoryEnabled('/home/user/company/project-a', patterns), true);
+			assert.strictEqual(isRepositoryEnabled('/work/company/api', patterns), true);
+			assert.strictEqual(isRepositoryEnabled('/home/user/other/project', patterns), false);
+		});
+
+		test('matches glob pattern with ** prefix for any nested path', () => {
+			const patterns = ['**/work/**'];
+			assert.strictEqual(isRepositoryEnabled('/home/user/work/project', patterns), true);
+			assert.strictEqual(isRepositoryEnabled('/home/user/work/team/nested/deep', patterns), true);
+			assert.strictEqual(isRepositoryEnabled('/var/work/app', patterns), true);
+			assert.strictEqual(isRepositoryEnabled('/home/user/personal/project', patterns), false);
+		});
+
+		test('matches glob pattern with wildcard prefix for folder name', () => {
+			const patterns = ['**/*-internal'];
+			assert.strictEqual(isRepositoryEnabled('/home/user/api-internal', patterns), true);
+			assert.strictEqual(isRepositoryEnabled('/projects/web-internal', patterns), true);
+			assert.strictEqual(isRepositoryEnabled('/home/user/api-external', patterns), false);
+		});
+
 		test('matches multiple patterns (any match succeeds)', () => {
 			const patterns = ['/home/user/work/*', '/home/user/client/*'];
 			assert.strictEqual(isRepositoryEnabled('/home/user/work/project', patterns), true);

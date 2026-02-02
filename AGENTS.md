@@ -5,8 +5,7 @@
 ### VSCode Extension (`packages/vscode-extension`)
 - `npm run compile-tests` - compile TypeScript (includes protocol build)
 - `npm run lint` - run ESLint
-- `npm test` - run full test suite (requires VSCode download)
-- `npx mocha 'out/__tests__/unit/**/*.test.js'` - run unit tests only (no VSCode needed)
+- `npm test` - run full test suite
 
 ## Testing and Definition of Done
 
@@ -18,12 +17,10 @@
 
 ### Test Organization
 - Use `__tests__` folder for test files
-- Use `__tests__/unit/` for pure unit tests (no VSCode dependencies)
 - Use `*.test.ts` naming convention
-- Unit tests should be runnable with mocha directly (faster feedback)
 
 ### Definition of Done
-- All unit tests pass (`npx mocha 'out/__tests__/unit/**/*.test.js'`)
+- All tests pass (`npm test`)
 - Code compiles without errors (`npm run compile-tests`)
 - Lint passes (`npm run lint`)
 - Implementation matches the approved plan
@@ -31,6 +28,7 @@
 ## Architecture and Complexity
 - Keep solutions simple; avoid unnecessary complexity.
 - Keep dependencies at an absolute minimum; get approval before adding any new dependency.
+- Always commit `package-lock.json` when adding or updating dependencies.
 - Split domain logic from technical/infrastructure concerns (DDD).
 - Keep business rules in domain modules with minimal dependencies.
 - Keep adapters, IO, and framework code in separate technical layers.
