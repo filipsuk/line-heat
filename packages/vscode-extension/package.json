@@ -73,9 +73,23 @@
           "default": 15,
           "minimum": 0,
           "description": "Minimum time (in minutes) between presence conflict notifications for the same file. Set to 0 to disable notifications."
+        },
+        "lineheat.enabledRepositories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Glob patterns for repositories where LineHeat is enabled. Empty = enabled everywhere. Example: [\"/home/user/work/*\", \"**/company-*\"]"
         }
       }
-    }
+    },
+    "commands": [
+      {
+        "command": "lineheat.enableForRepository",
+        "title": "LineHeat: Enable for this repository"
+      }
+    ]
   },
   "scripts": {
     "build:protocol": "npm run build -w @line-heat/protocol",
@@ -93,20 +107,21 @@
     "lint": "eslint src",
     "test": "vscode-test"
   },
-  "dependencies": {},
   "devDependencies": {
     "@line-heat/protocol": "0.0.0",
-    "@types/vscode": "^1.105.1",
-    "@types/ws": "^8.18.1",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
-    "esbuild": "^0.25.10",
-    "socket.io-client": "^4.8.1",
-    "socket.io": "^4.8.1",
-    "typescript-eslint": "^8.52.0",
-    "eslint": "^9.39.2",
-    "typescript": "^5.9.3",
+    "@types/picomatch": "^4.0.2",
+    "@types/vscode": "^1.105.1",
+    "@types/ws": "^8.18.1",
     "@vscode/test-cli": "^0.0.12",
-    "@vscode/test-electron": "^2.5.2"
+    "@vscode/test-electron": "^2.5.2",
+    "esbuild": "^0.25.10",
+    "eslint": "^9.39.2",
+    "picomatch": "^4.0.3",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.52.0"
   }
 }

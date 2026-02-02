@@ -22,7 +22,7 @@ import {
 	formatRelativeTime,
 } from './format';
 import { createLogger } from './logger';
-import { hasRequiredSettings, readSettings } from './settings';
+import { hasRequiredSettings, isRepositoryEnabled, readSettings } from './settings';
 import {
 	getDocumentSymbols,
 	resetSymbolState,
@@ -44,6 +44,7 @@ let protocolIncompatPopupShown = false;
 let protocolModule: ProtocolModule | undefined;
 let activeRepoState: RepoState = { status: 'unknown' };
 let noGitLogged = false;
+let activeRepoEnabled = true;
 
 let activeRoomContext: RoomContext | undefined;
 let desiredRooms = new Map<RoomKey, RoomContext>();
@@ -254,24 +255,30 @@ const updateStatusBar = () => {
 	}
 
 	if (!hasRequiredSettings(currentSettings)) {
-		statusBarItem.text = '$(circle-slash)';
+		statusBarItem.text = '$(circle-slash) LineHeat';
 		statusBarItem.tooltip = 'LineHeat is disabled. Configure server URL and token.';
 		return;
 	}
 
 	if (activeRepoState.status === 'nogit') {
-		statusBarItem.text = '$(circle-slash)';
+		statusBarItem.text = '$(circle-slash) LineHeat';
 		statusBarItem.tooltip = 'LineHeat is disabled (no git remote detected).';
 		return;
 	}
 
+	if (!activeRepoEnabled) {
+		statusBarItem.text = '$(flame) LineHeat (Disabled)';
+		statusBarItem.tooltip = 'LineHeat is disabled for this repository. Click to open settings.';
+		return;
+	}
+
 	if (activeSocket?.connected) {
-		statusBarItem.text = '$(flame)';
+		statusBarItem.text = '$(flame) LineHeat';
 		statusBarItem.tooltip = `LineHeat connected (retention ${retentionDays} days). Click to open settings.`;
 		return;
 	}
 
-	statusBarItem.text = '$(debug-disconnect)';
+	statusBarItem.text = '$(flame) LineHeat (Offline)';
 	statusBarItem.tooltip = 'LineHeat is disconnected. Click to open settings.';
 };
 
@@ -457,12 +464,14 @@ const refreshActiveRepoState = async (
 	if (!editor) {
 		activeRepoState = { status: 'unknown' };
 		activeRoomContext = undefined;
+		activeRepoEnabled = true;
 		updateStatusBar();
 		return undefined;
 	}
 	if (editor.document.uri.scheme !== 'file') {
 		activeRepoState = { status: 'unknown' };
 		activeRoomContext = undefined;
+		activeRepoEnabled = true;
 		updateStatusBar();
 		return undefined;
 	}
@@ -471,10 +480,24 @@ const refreshActiveRepoState = async (
 	if (!context) {
 		activeRepoState = { status: 'nogit' };
 		activeRoomContext = undefined;
+		activeRepoEnabled = true;
 		updateStatusBar();
 		logNoGitOnce(logger);
 		return undefined;
 	}
+
+	// Check if this repository is enabled
+	const enabledPatterns = currentSettings?.enabledRepositories ?? [];
+	activeRepoEnabled = isRepositoryEnabled(context.gitRoot, enabledPatterns);
+
+	if (!activeRepoEnabled) {
+		logger.debug(`lineheat: repo-disabled gitRoot=${context.gitRoot}`);
+		activeRepoState = { status: 'ready', context };
+		activeRoomContext = undefined;
+		updateStatusBar();
+		return undefined;
+	}
+
 	activeRepoState = { status: 'ready', context };
 	activeRoomContext = { repoId: context.repoId, filePath: context.filePath };
 	logger.debug(`active repo ${JSON.stringify({ repoId: context.repoId, filePath: context.filePath })}`);
@@ -621,6 +644,7 @@ const updateDesiredPresenceFromEditor = async (editor: vscode.TextEditor | undef
 const updateOpenRoomsFromTabs = async (logger: LineHeatLogger) => {
 	try {
 		const tabs = vscode.window.tabGroups.all.flatMap((group) => group.tabs);
+		const enabledPatterns = currentSettings?.enabledRepositories ?? [];
 		const roomResults = await Promise.all(
 			tabs.map(async (tab) => {
 				if (!(tab.input instanceof vscode.TabInputText)) {
@@ -632,6 +656,10 @@ const updateOpenRoomsFromTabs = async (logger: LineHeatLogger) => {
 				}
 				const context = await resolveRepoContext(uri.fsPath, logger);
 				if (!context) {
+					return undefined;
+				}
+				// Skip disabled repositories
+				if (!isRepositoryEnabled(context.gitRoot, enabledPatterns)) {
 					return undefined;
 				}
 				return { repoId: context.repoId, filePath: context.filePath } as RoomContext;
@@ -772,7 +800,7 @@ export function activate(context: vscode.ExtensionContext) {
 	activeLogger = logger;
 	currentSettings = settings;
 	statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-	statusBarItem.text = '$(debug-disconnect)';
+	statusBarItem.text = '$(flame) LineHeat (Offline)';
 	statusBarItem.tooltip = 'LineHeat';
 	statusBarItem.command = { command: 'workbench.action.openSettings', arguments: ['lineheat'], title: 'Open LineHeat settings'};
 	statusBarItem.show();
@@ -796,6 +824,23 @@ export function activate(context: vscode.ExtensionContext) {
 				`LineHeat: ${label}${age ? ` · ${age}` : ''} · edit: ${editors} · live: ${live}`,
 			);
 		}),
+		vscode.commands.registerCommand('lineheat.enableForRepository', async () => {
+			const repoContext = activeRepoState.context;
+			if (!repoContext) {
+				void vscode.window.showWarningMessage('LineHeat: No repository detected in the current file.');
+				return;
+			}
+			const gitRoot = repoContext.gitRoot;
+			const config = vscode.workspace.getConfiguration('lineheat');
+			const currentPatterns = config.get<string[]>('enabledRepositories', []);
+			if (currentPatterns.includes(gitRoot)) {
+				void vscode.window.showInformationMessage(`LineHeat: Repository already enabled: ${gitRoot}`);
+				return;
+			}
+			const updatedPatterns = [...currentPatterns, gitRoot];
+			await config.update('enabledRepositories', updatedPatterns, vscode.ConfigurationTarget.Global);
+			void vscode.window.showInformationMessage(`LineHeat: Enabled for repository: ${gitRoot}`);
+		}),
 		{ dispose: () => {
 			heatCodeLensProvider = undefined;
 		} },
@@ -813,6 +858,12 @@ export function activate(context: vscode.ExtensionContext) {
 			const context = await resolveRepoContext(event.document.uri.fsPath, logger);
 			if (!context) {
 				logNoGitOnce(logger);
+				return;
+			}
+			// Skip disabled repositories
+			const enabledPatterns = currentSettings?.enabledRepositories ?? [];
+			if (!isRepositoryEnabled(context.gitRoot, enabledPatterns)) {
+				return;
 			}
 			const symbols = await getDocumentSymbols(event.document, logger);
 			const changesByLine = new Map<number, FunctionInfo | null>();
@@ -910,6 +961,7 @@ export function deactivate() {
 	disconnectSocket();
 	activeLogger = undefined;
 	activeRoomContext = undefined;
+	activeRepoEnabled = true;
 	desiredRooms.clear();
 	joinedRooms.clear();
 	openRoomCounts.clear();
