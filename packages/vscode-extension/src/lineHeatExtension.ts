@@ -27,6 +27,7 @@ import {
 } from './symbols';
 import { resolveRepoContext } from './repo';
 import { HeatCodeLensProvider } from './heatCodeLensProvider';
+import { checkAndShowOnboarding, openWalkthrough } from './onboarding';
 
 const USER_ID_KEY = 'lineheat.userId';
 
@@ -829,6 +830,7 @@ export function activate(context: vscode.ExtensionContext) {
 			await config.update('enabledRepositories', updatedPatterns, vscode.ConfigurationTarget.Global);
 			void vscode.window.showInformationMessage(`LineHeat: Enabled for repository: ${gitRoot}`);
 		}),
+		vscode.commands.registerCommand('lineheat.openWalkthrough', openWalkthrough),
 		{ dispose: () => {
 			heatCodeLensProvider = undefined;
 		} },
@@ -922,6 +924,9 @@ export function activate(context: vscode.ExtensionContext) {
 	void ensureUserId(context).then(async () => {
 		await loadProtocol();
 		refreshConnection(logger);
+
+		// Show onboarding notification if not configured
+		void checkAndShowOnboarding(context, logger);
 	});
 	updateStatusBar();
 	void updateActiveEditorState(logger, vscode.window.activeTextEditor);
