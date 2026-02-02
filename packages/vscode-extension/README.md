@@ -55,6 +55,16 @@ LineHeat is **not a surveillance tool**.
 
 If you are not looking at a file, LineHeat shows you nothing about it.
 
+## Repository Filtering
+
+You can limit LineHeat to specific repositories using glob patterns:
+
+```json
+"lineheat.enabledRepositories": ["/home/user/work/*", "**/company-*"]
+```
+
+By default (empty array), LineHeat is enabled for all repositories. Use the command **"LineHeat: Enable for this repository"** to quickly add the current repository.
+
 ## Troubleshooting
 
 - Open the **Output panel** and select the **LineHeat** log channel

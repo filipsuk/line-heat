@@ -67,6 +67,7 @@ export type LineHeatSettings = {
 	heatDecayHours: number;
 	logLevel: LogLevel;
 	presenceNotificationCooldownMinutes: number;
+	enabledRepositories: string[];
 };
 
 export type LineHeatLogger = {
