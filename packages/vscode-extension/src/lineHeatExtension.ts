@@ -18,9 +18,6 @@ import {
 	type ServerIncompatiblePayload,
 } from './types';
 
-import {
-	formatRelativeTime,
-} from './format';
 import { createLogger } from './logger';
 import { hasRequiredSettings, isRepositoryEnabled, readSettings } from './settings';
 import {
@@ -29,7 +26,7 @@ import {
 	resolveFunctionInfo,
 } from './symbols';
 import { resolveRepoContext } from './repo';
-import { HeatCodeLensProvider, type ActivityLensData } from './heatCodeLensProvider';
+import { HeatCodeLensProvider } from './heatCodeLensProvider';
 
 const USER_ID_KEY = 'lineheat.userId';
 
@@ -815,15 +812,6 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 	context.subscriptions.push(
 		vscode.languages.registerCodeLensProvider({ scheme: 'file' }, heatCodeLensProvider),
-		vscode.commands.registerCommand('lineheat.showHeatDetails', (data: ActivityLensData) => {
-			const label = data.functionLabel;
-			const age = data.lastEditAt ? formatRelativeTime(Date.now(), data.lastEditAt) : undefined;
-			const editors = data.editors.length > 0 ? data.editors.join(' ') : 'unknown';
-			const live = data.presence.length > 0 ? data.presence.join(' ') : 'none';
-			void vscode.window.showInformationMessage(
-				`LineHeat: ${label}${age ? ` · ${age}` : ''} · edit: ${editors} · live: ${live}`,
-			);
-		}),
 		vscode.commands.registerCommand('lineheat.enableForRepository', async () => {
 			const repoContext = activeRepoState.context;
 			if (!repoContext) {

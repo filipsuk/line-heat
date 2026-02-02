@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 
 import {
 	computeHeatIntensity,
-	formatFunctionLabel,
 	formatRelativeTime,
 	formatTopLabels,
 	formatUserLabel,
@@ -16,14 +15,6 @@ import {
 } from './types';
 import { getDocumentFunctionIndex } from './symbols';
 import { resolveRepoContext } from './repo';
-
-export type ActivityLensData = {
-	functionIdHash: string;
-	functionLabel: string;
-	lastEditAt?: number;
-	editors: string[];
-	presence: string[];
-};
 
 type HeatCodeLensProviderDeps = {
 	getLogger: () => LineHeatLogger | undefined;
@@ -170,14 +161,6 @@ export class HeatCodeLensProvider implements vscode.CodeLensProvider {
 			}
 			const title = titleParts.join(' · ');
 
-			const data: ActivityLensData = {
-				functionIdHash,
-				functionLabel: formatFunctionLabel(entry.functionId),
-				lastEditAt: lastNonSelfEditAt ?? heat?.lastEditAt,
-				editors: heatEditorsAll,
-				presence: presenceUsersAll,
-			};
-
 			const tooltipParts: string[] = [];
 			if (heatEmoji && heatAge) {
 				tooltipParts.push(`Last edit: ${heatAge}`, `Editors: ${heatEditorsText}`);
@@ -191,8 +174,7 @@ export class HeatCodeLensProvider implements vscode.CodeLensProvider {
 			lenses.push(
 				new vscode.CodeLens(range, {
 					title,
-					command: 'lineheat.showHeatDetails',
-					arguments: [data],
+					command: '',
 					tooltip: tooltipParts.join('\n'),
 				}),
 			);
