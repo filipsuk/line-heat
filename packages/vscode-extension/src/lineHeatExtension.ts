@@ -255,13 +255,13 @@ const updateStatusBar = () => {
 	}
 
 	if (!hasRequiredSettings(currentSettings)) {
-		statusBarItem.text = '$(circle-slash) LineHeat';
+		statusBarItem.text = '$(flame) LineHeat (Not Configured)';
 		statusBarItem.tooltip = 'LineHeat is disabled. Configure server URL and token.';
 		return;
 	}
 
 	if (activeRepoState.status === 'nogit') {
-		statusBarItem.text = '$(circle-slash) LineHeat';
+		statusBarItem.text = '$(flame) LineHeat (No Git)';
 		statusBarItem.tooltip = 'LineHeat is disabled (no git remote detected).';
 		return;
 	}
