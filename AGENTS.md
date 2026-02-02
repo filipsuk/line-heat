@@ -21,7 +21,7 @@
 
 ### Definition of Done
 - All tests pass (`npm test`)
-- Code compiles without errors (`npm run compile-tests`)
+- Code compiles without errors (`npm run compile`)
 - Lint passes (`npm run lint`)
 - Implementation matches the approved plan
 
