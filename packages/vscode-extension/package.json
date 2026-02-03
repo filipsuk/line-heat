@@ -101,22 +101,11 @@
         "description": "See who's working on the same code in real-time",
         "steps": [
           {
-            "id": "getToken",
-            "title": "Get your access token",
-            "description": "Get a shared token from your team lead or create one for your team.\n\nYour team shares one token to see each other's presence.",
-            "media": {
-              "markdown": "The token connects everyone on your team to the same LineHeat server."
-            },
-            "completionEvents": [
-              "onSettingChanged:lineheat.token"
-            ]
-          },
-          {
             "id": "configureToken",
             "title": "Configure your token",
-            "description": "Paste your team token in the settings.\n\n[Open Token Settings](command:workbench.action.openSettings?%5B%22lineheat.token%22%5D)",
+            "description": "Get a shared token from your team lead and paste it in the settings.\n\n[Open Token Settings](command:workbench.action.openSettings?%5B%22lineheat.token%22%5D)",
             "media": {
-              "markdown": "Once configured, LineHeat will connect automatically."
+              "markdown": "Your team shares one token to see each other's presence. Once configured, LineHeat will connect automatically."
             },
             "completionEvents": [
               "onSettingChanged:lineheat.token"
@@ -127,7 +116,7 @@
             "title": "Personalize your presence",
             "description": "Set your display name and emoji so teammates recognize you.\n\n[Open Display Name Settings](command:workbench.action.openSettings?%5B%22lineheat.displayName%22%5D)",
             "media": {
-              "markdown": "Your name defaults to your OS username. Pick a fun emoji to stand out!"
+              "markdown": "Pick a fun emoji to stand out!"
             },
             "completionEvents": [
               "onSettingChanged:lineheat.displayName",
