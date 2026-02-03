@@ -19,7 +19,7 @@ import {
 } from './types';
 
 import { createLogger } from './logger';
-import { hasRequiredSettings, isRepositoryEnabled, readSettings } from './settings';
+import { hasRequiredSettings, initGitUserName, isRepositoryEnabled, readSettings } from './settings';
 import {
 	getDocumentSymbols,
 	resetSymbolState,
@@ -922,6 +922,7 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 
 	void ensureUserId(context).then(async () => {
+		await initGitUserName();
 		await loadProtocol();
 		refreshConnection(logger);
 

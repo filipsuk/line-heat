@@ -1,3 +1,4 @@
+import { execFile } from 'child_process';
 import * as os from 'os';
 import * as vscode from 'vscode';
 import picomatch from 'picomatch';
@@ -5,6 +6,26 @@ import picomatch from 'picomatch';
 import { type LineHeatSettings, type LogLevel } from './types';
 
 const normalizeString = (value: string | undefined) => value?.trim() ?? '';
+
+// Cached git user name, initialized at activation
+let cachedGitUserName: string | undefined;
+
+const getGitUserNameSync = (): string | undefined => cachedGitUserName;
+
+export const initGitUserName = (): Promise<void> =>
+	new Promise((resolve) => {
+		execFile(
+			'git',
+			['config', '--global', 'user.name'],
+			{ timeout: 1500 },
+			(error, stdout) => {
+				if (!error && stdout) {
+					cachedGitUserName = stdout.trim() || undefined;
+				}
+				resolve();
+			},
+		);
+	});
 
 export const readSettings = (): LineHeatSettings => {
 	const config = vscode.workspace.getConfiguration('lineheat');
@@ -14,7 +35,7 @@ export const readSettings = (): LineHeatSettings => {
 	return {
 		serverUrl: normalizeString(config.get<string>('serverUrl')),
 		token: normalizeString(config.get<string>('token')),
-		displayName: displayNameSetting || os.userInfo().username,
+		displayName: displayNameSetting || getGitUserNameSync() || os.userInfo().username,
 		emoji: emojiSetting || '🙂',
 		heatDecayHours: config.get<number>('heatDecayHours', 24),
 		logLevel: config.get<LogLevel>('logLevel', 'info'),
