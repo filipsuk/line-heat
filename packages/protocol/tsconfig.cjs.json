@@ -6,7 +6,8 @@
     "outDir": "dist/cjs",
     "declaration": false,
     "strict": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"]
   },
   "include": ["src/**/*.ts"]
 }
