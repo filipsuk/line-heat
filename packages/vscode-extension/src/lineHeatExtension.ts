@@ -28,6 +28,7 @@ import {
 import { resolveRepoContext } from './repo';
 import { HeatCodeLensProvider } from './heatCodeLensProvider';
 import { checkAndShowOnboarding, openWalkthrough } from './onboarding';
+import { buildNotificationMessage } from './notification';
 
 const USER_ID_KEY = 'lineheat.userId';
 
@@ -165,40 +166,35 @@ const maybeNotifyPresenceConflict = (
 	}
 
 	// Check for recent heat (edits by others)
-	const recentEditors: Array<{ emoji: string; displayName: string }> = [];
+	const recentEditors: Array<{ emoji: string; displayName: string; lastEditAt: number }> = [];
 	for (const heat of roomState.heatByFunctionId.values()) {
 		for (const editor of heat.topEditors) {
 			if (editor.userId !== userId) {
-				// Avoid duplicates
-				if (!recentEditors.some(e => e.displayName === editor.displayName)) {
-					recentEditors.push({ emoji: editor.emoji, displayName: editor.displayName });
+				// Avoid duplicates, keep the most recent edit time
+				const existing = recentEditors.find(e => e.displayName === editor.displayName);
+				if (!existing) {
+					recentEditors.push({ emoji: editor.emoji, displayName: editor.displayName, lastEditAt: editor.lastEditAt });
+				} else if (editor.lastEditAt > existing.lastEditAt) {
+					existing.lastEditAt = editor.lastEditAt;
 				}
 			}
 		}
 	}
 
-	const hasOtherPresence = otherPresenceUsers.length > 0;
-	const hasRecentActivity = recentEditors.length > 0;
+	const message = buildNotificationMessage({
+		otherPresenceUsers,
+		recentEditors,
+		now,
+	});
 
-	if (!hasOtherPresence && !hasRecentActivity) {
+	if (!message) {
 		logger.debug(`lineheat: presence-notification:skip reason=no-activity roomKey=${roomKey}`);
 		return;
 	}
 
-	// Build notification message
-	let message: string;
-	if (hasOtherPresence) {
-		const userLabels = otherPresenceUsers.slice(0, 3).map(u => `${u.emoji} ${u.displayName}`).join(', ');
-		const verb = otherPresenceUsers.length === 1 ? 'is' : 'are';
-		message = `LineHeat: ${userLabels} ${verb} also in this file`;
-	} else {
-		const editorLabels = recentEditors.slice(0, 3).map(e => `${e.emoji} ${e.displayName}`).join(', ');
-		message = `LineHeat: Recent activity by ${editorLabels}`;
-	}
-
 	logger.info(`lineheat: presence-notification:show roomKey=${roomKey} message="${message}"`);
 
-	void vscode.window.showInformationMessage(message);
+	void vscode.window.showWarningMessage(message);
 
 	lastNotificationTimeByRoom.set(roomKey, now);
 };
