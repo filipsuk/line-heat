@@ -43,15 +43,15 @@ export const computeHeatIntensity = (now: number, lastEditAt: number, decayMs: n
 
 export const getHeatEmojiFromIntensity = (intensity: number) => {
 	if (intensity >= 0.75) {
-		return '🔥';
+		return '🔥🔥🔥';
 	}
 	if (intensity >= 0.5) {
-		return '🟠';
+		return '🔥🔥';
 	}
 	if (intensity >= 0.25) {
-		return '🟡';
+		return '🔥';
 	}
-	return '🔵';
+	return '❄️';
 };
 
 export const formatTopLabels = (labels: string[], max: number) => {

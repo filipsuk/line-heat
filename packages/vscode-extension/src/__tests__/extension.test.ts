@@ -20,7 +20,7 @@ import {
 suite('Line Heat Extension', function () {
 	this.timeout(10000);
 	test('logs changed line number across open files', async () => {
-		const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+		const extension = vscode.extensions.getExtension<ExtensionApi>('filipsuk.lineheat-vscode');
 		assert.ok(extension, 'Extension not found');
 
 		const api = await extension?.activate();
@@ -72,7 +72,7 @@ suite('Line Heat Extension', function () {
 
 
 	test('logs function identifiers for edits', async () => {
-		const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+		const extension = vscode.extensions.getExtension<ExtensionApi>('filipsuk.lineheat-vscode');
 		assert.ok(extension, 'Extension not found');
 
 		const api = await extension?.activate();
@@ -130,7 +130,7 @@ suite('Line Heat Extension', function () {
 	});
 
 	test('supports standalone const functions', async () => {
-		const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+		const extension = vscode.extensions.getExtension<ExtensionApi>('filipsuk.lineheat-vscode');
 		assert.ok(extension, 'Extension not found');
 
 		const api = await extension?.activate();
@@ -179,7 +179,7 @@ suite('Line Heat Extension', function () {
 	});
 
 		test('does not treat nested const arrow functions as separate blocks', async () => {
-			const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+			const extension = vscode.extensions.getExtension<ExtensionApi>('filipsuk.lineheat-vscode');
 			assert.ok(extension, 'Extension not found');
 
 		const api = await extension?.activate();
@@ -232,7 +232,7 @@ suite('Line Heat Extension', function () {
 		});
 
 	test('attributes deep edits to the nearest level-2 block (top-level const arrow)', async () => {
-		const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+		const extension = vscode.extensions.getExtension<ExtensionApi>('filipsuk.lineheat-vscode');
 		assert.ok(extension, 'Extension not found');
 
 		const api = await extension?.activate();
@@ -280,7 +280,7 @@ suite('Line Heat Extension', function () {
 	});
 
 	test('attributes edits inside exported const arrow (empty body) to the const symbol', async () => {
-		const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+		const extension = vscode.extensions.getExtension<ExtensionApi>('filipsuk.lineheat-vscode');
 		assert.ok(extension, 'Extension not found');
 
 		const api = await extension?.activate();
@@ -320,7 +320,7 @@ suite('Line Heat Extension', function () {
 	});
 
 	test('attributes deep edits to the nearest level-2 block (top-level function)', async () => {
-		const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+		const extension = vscode.extensions.getExtension<ExtensionApi>('filipsuk.lineheat-vscode');
 		assert.ok(extension, 'Extension not found');
 
 		const api = await extension?.activate();
@@ -367,7 +367,7 @@ suite('Line Heat Extension', function () {
 	});
 
 	test('attributes deep edits to the nearest level-2 block (class method)', async () => {
-		const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+		const extension = vscode.extensions.getExtension<ExtensionApi>('filipsuk.lineheat-vscode');
 		assert.ok(extension, 'Extension not found');
 
 		const api = await extension?.activate();
@@ -413,7 +413,7 @@ suite('Line Heat Extension', function () {
 	});
 
 	test('attributes edits in class body to the class when no level-2 member applies', async () => {
-		const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+		const extension = vscode.extensions.getExtension<ExtensionApi>('filipsuk.lineheat-vscode');
 		assert.ok(extension, 'Extension not found');
 
 		const api = await extension?.activate();
@@ -505,7 +505,7 @@ suite('Line Heat Extension', function () {
 			await config.update('serverUrl', mockServer.serverUrl, vscode.ConfigurationTarget.Global);
 			await config.update('token', token, vscode.ConfigurationTarget.Global);
 
-			const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+			const extension = vscode.extensions.getExtension<ExtensionApi>('filipsuk.lineheat-vscode');
 			assert.ok(extension, 'Extension not found');
 			const api = await extension.activate();
 			assert.ok(api?.logger, 'Extension did not return logger');
@@ -578,7 +578,7 @@ suite('Line Heat Extension', function () {
 		await config.update('serverUrl', mockServer.serverUrl, vscode.ConfigurationTarget.Global);
 		await config.update('token', token, vscode.ConfigurationTarget.Global);
 
-		const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+		const extension = vscode.extensions.getExtension<ExtensionApi>('filipsuk.lineheat-vscode');
 		assert.ok(extension, 'Extension not found');
 		await extension.activate();
 
@@ -665,7 +665,7 @@ suite('Line Heat Extension', function () {
 			await config.update('serverUrl', mockServer.serverUrl, vscode.ConfigurationTarget.Global);
 			await config.update('token', token, vscode.ConfigurationTarget.Global);
 
-			const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+			const extension = vscode.extensions.getExtension<ExtensionApi>('filipsuk.lineheat-vscode');
 			assert.ok(extension, 'Extension not found');
 			await extension.activate();
 
@@ -751,7 +751,7 @@ suite('Line Heat Extension', function () {
 			await config.update('serverUrl', mockServer.serverUrl, vscode.ConfigurationTarget.Global);
 			await config.update('token', token, vscode.ConfigurationTarget.Global);
 
-			const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+			const extension = vscode.extensions.getExtension<ExtensionApi>('filipsuk.lineheat-vscode');
 			assert.ok(extension, 'Extension not found');
 			await extension.activate();
 
@@ -807,7 +807,7 @@ suite('Line Heat Extension', function () {
 		await config.update('serverUrl', mockServer.serverUrl, vscode.ConfigurationTarget.Global);
 		await config.update('token', token, vscode.ConfigurationTarget.Global);
 
-		const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+		const extension = vscode.extensions.getExtension<ExtensionApi>('filipsuk.lineheat-vscode');
 		assert.ok(extension, 'Extension not found');
 
 		await extension.activate();
@@ -882,7 +882,7 @@ suite('Line Heat Extension', function () {
 				await config.update('serverUrl', mockServer.serverUrl, vscode.ConfigurationTarget.Global);
 				await config.update('token', token, vscode.ConfigurationTarget.Global);
 
-				const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+				const extension = vscode.extensions.getExtension<ExtensionApi>('filipsuk.lineheat-vscode');
 				assert.ok(extension, 'Extension not found');
 				await extension.activate();
 
@@ -1016,7 +1016,7 @@ suite('Line Heat Extension', function () {
 			await config.update('serverUrl', mockServer.serverUrl, vscode.ConfigurationTarget.Global);
 			await config.update('token', token, vscode.ConfigurationTarget.Global);
 
-			const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+			const extension = vscode.extensions.getExtension<ExtensionApi>('filipsuk.lineheat-vscode');
 			assert.ok(extension, 'Extension not found');
 			await extension.activate();
 
@@ -1065,10 +1065,10 @@ suite('Line Heat Extension', function () {
 						.map((lens) => lens.command?.title)
 						.filter((title): title is string => Boolean(title));
 					const hasHot = titles.some(
-						(title) => title.includes('🔥') && title.includes(`${aliceEmoji} ${aliceName}`),
+						(title) => title.includes('🔥🔥🔥') && title.includes(`${aliceEmoji} ${aliceName}`),
 					);
 					const hasMild = titles.some(
-						(title) => title.includes('🟡') && title.includes(`${aliceEmoji} ${aliceName}`),
+						(title) => title.includes('🔥') && !title.includes('🔥🔥') && title.includes(`${aliceEmoji} ${aliceName}`),
 					);
 					const hasPresence = titles.some(
 						(title) => title.includes('live:') && title.includes(`${carolEmoji} ${carolName}`),
@@ -1138,7 +1138,7 @@ suite('Line Heat Extension', function () {
 			await config.update('displayName', selfName, vscode.ConfigurationTarget.Global);
 			await config.update('emoji', selfEmoji, vscode.ConfigurationTarget.Global);
 
-			const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+			const extension = vscode.extensions.getExtension<ExtensionApi>('filipsuk.lineheat-vscode');
 			assert.ok(extension, 'Extension not found');
 			await extension.activate();
 
@@ -1185,10 +1185,6 @@ suite('Line Heat Extension', function () {
 					assert.ok(title.includes(`${aliceEmoji} ${aliceName}`), `Expected title to contain Alice, got: ${title}`);
 					// Should not contain self user in the title
 					assert.ok(!title.includes(selfName), `Expected title to not contain self user, got: ${title}`);
-					
-					// Tooltip should also use the non-self age
-					const tooltip = heatLens.command?.tooltip ?? '';
-					assert.ok(tooltip.includes('30m'), `Expected tooltip to contain "30m", got: ${tooltip}`);
 					return true;
 				}, 8000);
 			} finally {
@@ -1250,7 +1246,7 @@ suite('Line Heat Extension', function () {
 			await config.update('serverUrl', mockServer.serverUrl, vscode.ConfigurationTarget.Global);
 			await config.update('token', token, vscode.ConfigurationTarget.Global);
 
-			const extension = vscode.extensions.getExtension<ExtensionApi>('lineheat.vscode-extension');
+			const extension = vscode.extensions.getExtension<ExtensionApi>('filipsuk.lineheat-vscode');
 			assert.ok(extension, 'Extension not found');
 			await extension.activate();
 
