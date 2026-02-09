@@ -179,7 +179,6 @@ const maybeNotifyPresenceConflict = async (
 
 	// Track the most recent activity for navigation
 	let mostRecentFunctionId: string | undefined;
-	let mostRecentAnchorLine: number | undefined;
 	let mostRecentEditAt = 0;
 
 	// Check for other users' presence (exclude self)
@@ -194,7 +193,6 @@ const maybeNotifyPresenceConflict = async (
 				// Track first presence location for navigation
 				if (!mostRecentFunctionId) {
 					mostRecentFunctionId = hashToFunctionId.get(hashedFunctionId);
-					mostRecentAnchorLine = presence.anchorLine;
 				}
 			}
 		}
@@ -216,14 +214,15 @@ const maybeNotifyPresenceConflict = async (
 				if (editor.lastEditAt > mostRecentEditAt) {
 					mostRecentEditAt = editor.lastEditAt;
 					mostRecentFunctionId = hashToFunctionId.get(hashedFunctionId);
-					mostRecentAnchorLine = heat.anchorLine;
 				}
 			}
 		}
 	}
 
-	// Resolve function name from functionId
+	// Resolve function name and anchor line from function index (same as CodeLens)
 	const functionName = mostRecentFunctionId ? formatFunctionLabel(mostRecentFunctionId) : undefined;
+	const functionEntries = mostRecentFunctionId && functionIndex ? functionIndex.get(mostRecentFunctionId) : undefined;
+	const functionAnchorLine = functionEntries?.[0]?.anchorLine;
 
 	// Calculate decay in milliseconds from settings
 	const decayHours = currentSettings.heatDecayHours ?? 72;
@@ -235,7 +234,7 @@ const maybeNotifyPresenceConflict = async (
 		now,
 		filename,
 		functionName,
-		anchorLine: mostRecentAnchorLine,
+		anchorLine: functionAnchorLine,
 		decayMs,
 	});
 
