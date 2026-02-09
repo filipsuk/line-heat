@@ -67,9 +67,9 @@ export const buildNotificationMessage = (
 			.join(', ');
 
 		if (methodName) {
-			// With function name: "is in validateForm in UserForm.ts"
+			// With function name: "is in `validateForm` in UserForm.ts"
 			const verb = otherPresenceUsers.length === 1 ? 'is' : 'are';
-			message = `LineHeat: ${userLabels} ${verb} in ${methodName} in ${filename}.`;
+			message = `LineHeat: ${userLabels} ${verb} in \`${methodName}\` in ${filename}.`;
 		} else {
 			// Without function name: "is also in UserForm.ts"
 			const verb = otherPresenceUsers.length === 1 ? 'is' : 'are';
@@ -87,8 +87,8 @@ export const buildNotificationMessage = (
 		const timeAgo = formatRelativeTime(now, mostRecentEditAt);
 
 		if (methodName) {
-			// With function name: "made changes to validateForm in UserForm.ts 5m ago"
-			message = `LineHeat: ${editorLabels} made changes to ${methodName} in ${filename} ${timeAgo}.`;
+			// With function name: "made changes to `validateForm` in UserForm.ts 5m ago"
+			message = `LineHeat: ${editorLabels} made changes to \`${methodName}\` in ${filename} ${timeAgo}.`;
 		} else {
 			// Without function name: "made changes in UserForm.ts 5m ago"
 			message = `LineHeat: ${editorLabels} made changes in ${filename} ${timeAgo}.`;
