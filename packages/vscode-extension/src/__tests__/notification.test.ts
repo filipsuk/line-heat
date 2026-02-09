@@ -8,17 +8,30 @@ suite('notification utilities', function () {
 				otherPresenceUsers: [],
 				recentEditors: [],
 				now: Date.now(),
+				filename: 'UserForm.ts',
 			});
 			assert.strictEqual(result, null);
 		});
 
-		test('returns singular message for one user with presence', () => {
+		test('returns singular message for one user with presence including filename', () => {
 			const result = buildNotificationMessage({
 				otherPresenceUsers: [{ emoji: '🦄', displayName: 'Alice' }],
 				recentEditors: [],
 				now: Date.now(),
+				filename: 'UserForm.ts',
 			});
-			assert.strictEqual(result, 'LineHeat: 🦄 Alice is also in this file.');
+			assert.strictEqual(result, 'LineHeat: 🦄 Alice is also in UserForm.ts.');
+		});
+
+		test('returns singular message with function name when provided', () => {
+			const result = buildNotificationMessage({
+				otherPresenceUsers: [{ emoji: '🦄', displayName: 'Alice' }],
+				recentEditors: [],
+				now: Date.now(),
+				filename: 'UserForm.ts',
+				functionName: 'validateForm',
+			});
+			assert.strictEqual(result, 'LineHeat: 🦄 Alice is in validateForm in UserForm.ts.');
 		});
 
 		test('returns plural message for two users with presence', () => {
@@ -29,21 +42,23 @@ suite('notification utilities', function () {
 				],
 				recentEditors: [],
 				now: Date.now(),
+				filename: 'UserForm.ts',
 			});
-			assert.strictEqual(result, 'LineHeat: 🦄 Alice, 🐱 Bob are also in this file.');
+			assert.strictEqual(result, 'LineHeat: 🦄 Alice, 🐱 Bob are also in UserForm.ts.');
 		});
 
-		test('returns plural message for three users with presence', () => {
+		test('returns plural message with function name when provided', () => {
 			const result = buildNotificationMessage({
 				otherPresenceUsers: [
 					{ emoji: '🦄', displayName: 'Alice' },
 					{ emoji: '🐱', displayName: 'Bob' },
-					{ emoji: '🐶', displayName: 'Carol' },
 				],
 				recentEditors: [],
 				now: Date.now(),
+				filename: 'UserForm.ts',
+				functionName: 'validateForm',
 			});
-			assert.strictEqual(result, 'LineHeat: 🦄 Alice, 🐱 Bob, 🐶 Carol are also in this file.');
+			assert.strictEqual(result, 'LineHeat: 🦄 Alice, 🐱 Bob are in validateForm in UserForm.ts.');
 		});
 
 		test('truncates to 3 users for presence', () => {
@@ -56,21 +71,36 @@ suite('notification utilities', function () {
 				],
 				recentEditors: [],
 				now: Date.now(),
+				filename: 'UserForm.ts',
 			});
-			assert.strictEqual(result, 'LineHeat: 🦄 Alice, 🐱 Bob, 🐶 Carol are also in this file.');
+			assert.strictEqual(result, 'LineHeat: 🦄 Alice, 🐱 Bob, 🐶 Carol are also in UserForm.ts.');
 		});
 	});
 
 	suite('buildNotificationMessage for changes', function () {
-		test('returns singular message for one user with changes', () => {
+		test('returns singular message for one user with changes including filename', () => {
 			const now = Date.now();
 			const fiveMinutesAgo = now - 5 * 60 * 1000;
 			const result = buildNotificationMessage({
 				otherPresenceUsers: [],
 				recentEditors: [{ emoji: '🦄', displayName: 'Alice', lastEditAt: fiveMinutesAgo }],
 				now,
+				filename: 'UserForm.ts',
 			});
-			assert.strictEqual(result, 'LineHeat: 🦄 Alice made changes in this file 5m ago.');
+			assert.strictEqual(result, 'LineHeat: 🦄 Alice made changes in UserForm.ts 5m ago.');
+		});
+
+		test('returns singular message with function name when provided', () => {
+			const now = Date.now();
+			const fiveMinutesAgo = now - 5 * 60 * 1000;
+			const result = buildNotificationMessage({
+				otherPresenceUsers: [],
+				recentEditors: [{ emoji: '🦄', displayName: 'Alice', lastEditAt: fiveMinutesAgo }],
+				now,
+				filename: 'UserForm.ts',
+				functionName: 'validateForm',
+			});
+			assert.strictEqual(result, 'LineHeat: 🦄 Alice made changes to validateForm in UserForm.ts 5m ago.');
 		});
 
 		test('returns plural message for two users with changes showing most recent time', () => {
@@ -84,8 +114,9 @@ suite('notification utilities', function () {
 					{ emoji: '🐱', displayName: 'Bob', lastEditAt: fiveMinutesAgo },
 				],
 				now,
+				filename: 'UserForm.ts',
 			});
-			assert.strictEqual(result, 'LineHeat: 🦄 Alice, 🐱 Bob made changes in this file 5m ago.');
+			assert.strictEqual(result, 'LineHeat: 🦄 Alice, 🐱 Bob made changes in UserForm.ts 5m ago.');
 		});
 
 		test('uses most recent time across all editors', () => {
@@ -101,8 +132,10 @@ suite('notification utilities', function () {
 					{ emoji: '🐶', displayName: 'Carol', lastEditAt: thirtyMinutesAgo },
 				],
 				now,
+				filename: 'UserForm.ts',
+				functionName: 'submitHandler',
 			});
-			assert.strictEqual(result, 'LineHeat: 🦄 Alice, 🐱 Bob, 🐶 Carol made changes in this file 2m ago.');
+			assert.strictEqual(result, 'LineHeat: 🦄 Alice, 🐱 Bob, 🐶 Carol made changes to submitHandler in UserForm.ts 2m ago.');
 		});
 
 		test('shows "now" for very recent changes', () => {
@@ -112,8 +145,9 @@ suite('notification utilities', function () {
 				otherPresenceUsers: [],
 				recentEditors: [{ emoji: '🦄', displayName: 'Alice', lastEditAt: tenSecondsAgo }],
 				now,
+				filename: 'UserForm.ts',
 			});
-			assert.strictEqual(result, 'LineHeat: 🦄 Alice made changes in this file now.');
+			assert.strictEqual(result, 'LineHeat: 🦄 Alice made changes in UserForm.ts now.');
 		});
 
 		test('truncates to 3 users for changes', () => {
@@ -128,8 +162,9 @@ suite('notification utilities', function () {
 					{ emoji: '🦊', displayName: 'Dave', lastEditAt: fiveMinutesAgo },
 				],
 				now,
+				filename: 'UserForm.ts',
 			});
-			assert.strictEqual(result, 'LineHeat: 🦄 Alice, 🐱 Bob, 🐶 Carol made changes in this file 5m ago.');
+			assert.strictEqual(result, 'LineHeat: 🦄 Alice, 🐱 Bob, 🐶 Carol made changes in UserForm.ts 5m ago.');
 		});
 	});
 
@@ -141,8 +176,53 @@ suite('notification utilities', function () {
 				otherPresenceUsers: [{ emoji: '🦄', displayName: 'Alice' }],
 				recentEditors: [{ emoji: '🐱', displayName: 'Bob', lastEditAt: fiveMinutesAgo }],
 				now,
+				filename: 'UserForm.ts',
+				functionName: 'validateForm',
 			});
-			assert.strictEqual(result, 'LineHeat: 🦄 Alice is also in this file.');
+			assert.strictEqual(result, 'LineHeat: 🦄 Alice is in validateForm in UserForm.ts.');
+		});
+	});
+
+	suite('buildNotificationMessage returns navigation info', function () {
+		test('returns anchorLine for navigation when provided', () => {
+			const now = Date.now();
+			const fiveMinutesAgo = now - 5 * 60 * 1000;
+			const result = buildNotificationMessage({
+				otherPresenceUsers: [],
+				recentEditors: [{ emoji: '🦄', displayName: 'Alice', lastEditAt: fiveMinutesAgo }],
+				now,
+				filename: 'UserForm.ts',
+				functionName: 'validateForm',
+				anchorLine: 42,
+			});
+			assert.ok(result !== null && typeof result === 'object');
+			assert.strictEqual(result.message, 'LineHeat: 🦄 Alice made changes to validateForm in UserForm.ts 5m ago.');
+			assert.strictEqual(result.anchorLine, 42);
+		});
+
+		test('returns anchorLine for presence notification', () => {
+			const result = buildNotificationMessage({
+				otherPresenceUsers: [{ emoji: '🦄', displayName: 'Alice' }],
+				recentEditors: [],
+				now: Date.now(),
+				filename: 'UserForm.ts',
+				functionName: 'validateForm',
+				anchorLine: 15,
+			});
+			assert.ok(result !== null && typeof result === 'object');
+			assert.strictEqual(result.message, 'LineHeat: 🦄 Alice is in validateForm in UserForm.ts.');
+			assert.strictEqual(result.anchorLine, 15);
+		});
+
+		test('returns string when no anchorLine provided (backward compatibility)', () => {
+			const result = buildNotificationMessage({
+				otherPresenceUsers: [{ emoji: '🦄', displayName: 'Alice' }],
+				recentEditors: [],
+				now: Date.now(),
+				filename: 'UserForm.ts',
+			});
+			// When no anchorLine, returns just the string for backward compat
+			assert.strictEqual(result, 'LineHeat: 🦄 Alice is also in UserForm.ts.');
 		});
 	});
 });

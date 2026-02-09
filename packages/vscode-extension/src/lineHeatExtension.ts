@@ -1,10 +1,12 @@
 import * as crypto from 'crypto';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { io, Socket } from 'socket.io-client';
 
 import {
 	type FileDeltaPayload,
 	type FunctionInfo,
+	type FunctionSymbolEntry,
 	type LineHeatLogger,
 	type LineHeatSettings,
 	type PresenceState,
@@ -19,8 +21,10 @@ import {
 } from './types';
 
 import { createLogger } from './logger';
+import { formatFunctionLabel } from './format';
 import { hasRequiredSettings, initGitUserName, isRepositoryEnabled, readSettings } from './settings';
 import {
+	getDocumentFunctionIndex,
 	getDocumentSymbols,
 	resetSymbolState,
 	resolveFunctionInfo,
@@ -28,7 +32,7 @@ import {
 import { resolveRepoContext } from './repo';
 import { HeatCodeLensProvider } from './heatCodeLensProvider';
 import { checkAndShowOnboarding, openWalkthrough } from './onboarding';
-import { buildNotificationMessage } from './notification';
+import { buildNotificationMessage, type NotificationResult } from './notification';
 
 const USER_ID_KEY = 'lineheat.userId';
 
@@ -121,11 +125,12 @@ const formatSymbolsSummary = (symbols: vscode.DocumentSymbol[], maxItems = 8) =>
 		.join(' | ');
 };
 
-const maybeNotifyPresenceConflict = (
+const maybeNotifyPresenceConflict = async (
 	roomKey: RoomKey,
 	logger: LineHeatLogger,
+	editor: vscode.TextEditor | undefined,
 ) => {
-	if (!currentSettings || !userId) {
+	if (!currentSettings || !userId || !protocolModule) {
 		return;
 	}
 
@@ -152,14 +157,44 @@ const maybeNotifyPresenceConflict = (
 		return;
 	}
 
+	// Extract filename from roomKey (format: repoId:filePath)
+	const colonIndex = roomKey.indexOf(':');
+	const filePath = colonIndex >= 0 ? roomKey.slice(colonIndex + 1) : roomKey;
+	const filename = path.basename(filePath);
+
+	// Build function index for matching hashed IDs to function names
+	let functionIndex: Map<string, FunctionSymbolEntry[]> | undefined;
+	if (editor && editor.document.uri.scheme === 'file') {
+		functionIndex = await getDocumentFunctionIndex(editor.document, logger);
+	}
+
+	// Create a map of hashed functionId -> functionId for reverse lookup
+	const hashToFunctionId = new Map<string, string>();
+	if (functionIndex) {
+		for (const functionId of functionIndex.keys()) {
+			const hashedId = protocolModule.sha256Hex(functionId);
+			hashToFunctionId.set(hashedId, functionId);
+		}
+	}
+
+	// Track the most recent activity for navigation
+	let mostRecentFunctionId: string | undefined;
+	let mostRecentAnchorLine: number | undefined;
+	let mostRecentEditAt = 0;
+
 	// Check for other users' presence (exclude self)
 	const otherPresenceUsers: Array<{ emoji: string; displayName: string }> = [];
-	for (const presence of roomState.presenceByFunctionId.values()) {
+	for (const [hashedFunctionId, presence] of roomState.presenceByFunctionId.entries()) {
 		for (const user of presence.users) {
 			if (user.userId !== userId) {
 				// Avoid duplicates
 				if (!otherPresenceUsers.some(u => u.displayName === user.displayName)) {
 					otherPresenceUsers.push({ emoji: user.emoji, displayName: user.displayName });
+				}
+				// Track first presence location for navigation
+				if (!mostRecentFunctionId) {
+					mostRecentFunctionId = hashToFunctionId.get(hashedFunctionId);
+					mostRecentAnchorLine = presence.anchorLine;
 				}
 			}
 		}
@@ -167,7 +202,7 @@ const maybeNotifyPresenceConflict = (
 
 	// Check for recent heat (edits by others)
 	const recentEditors: Array<{ emoji: string; displayName: string; lastEditAt: number }> = [];
-	for (const heat of roomState.heatByFunctionId.values()) {
+	for (const [hashedFunctionId, heat] of roomState.heatByFunctionId.entries()) {
 		for (const editor of heat.topEditors) {
 			if (editor.userId !== userId) {
 				// Avoid duplicates, keep the most recent edit time
@@ -177,26 +212,54 @@ const maybeNotifyPresenceConflict = (
 				} else if (editor.lastEditAt > existing.lastEditAt) {
 					existing.lastEditAt = editor.lastEditAt;
 				}
+				// Track most recent edit for navigation
+				if (editor.lastEditAt > mostRecentEditAt) {
+					mostRecentEditAt = editor.lastEditAt;
+					mostRecentFunctionId = hashToFunctionId.get(hashedFunctionId);
+					mostRecentAnchorLine = heat.anchorLine;
+				}
 			}
 		}
 	}
 
-	const message = buildNotificationMessage({
+	// Resolve function name from functionId
+	const functionName = mostRecentFunctionId ? formatFunctionLabel(mostRecentFunctionId) : undefined;
+
+	const result = buildNotificationMessage({
 		otherPresenceUsers,
 		recentEditors,
 		now,
+		filename,
+		functionName,
+		anchorLine: mostRecentAnchorLine,
 	});
 
-	if (!message) {
+	if (!result) {
 		logger.debug(`lineheat: presence-notification:skip reason=no-activity roomKey=${roomKey}`);
 		return;
 	}
 
+	// Extract message and anchorLine from result
+	const message = typeof result === 'string' ? result : result.message;
+	const anchorLine = typeof result === 'object' ? result.anchorLine : undefined;
+
 	logger.info(`lineheat: presence-notification:show roomKey=${roomKey} message="${message}"`);
 
-	void vscode.window.showWarningMessage(message);
-
 	lastNotificationTimeByRoom.set(roomKey, now);
+
+	// Show notification with "Go to" button if we have a location to navigate to
+	if (anchorLine !== undefined && editor) {
+		const selection = await vscode.window.showWarningMessage(message, 'Go to');
+		if (selection === 'Go to') {
+			const line = Math.max(0, anchorLine - 1); // Convert to 0-indexed
+			const position = new vscode.Position(line, 0);
+			const range = new vscode.Range(position, position);
+			editor.selection = new vscode.Selection(position, position);
+			editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+		}
+	} else {
+		void vscode.window.showWarningMessage(message);
+	}
 };
 
 const emitRoomJoin = (logger: LineHeatLogger, room: RoomContext) => {
@@ -724,7 +787,7 @@ const updateActiveEditorState = async (
 
 	// Notify user if they moved to a file with other presence or recent activity
 	if (roomChanged && activeRoomKey) {
-		maybeNotifyPresenceConflict(activeRoomKey, logger);
+		void maybeNotifyPresenceConflict(activeRoomKey, logger, editor);
 	}
 };
 
