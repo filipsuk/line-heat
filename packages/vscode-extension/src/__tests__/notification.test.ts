@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { buildNotificationMessage } from '../notification';
+import { buildNotificationMessage, selectTargetFunctionId } from '../notification';
 
 suite('notification utilities', function () {
 	suite('buildNotificationMessage for presence', function () {
@@ -328,6 +328,59 @@ suite('notification utilities', function () {
 			});
 			// When no anchorLine, returns just the string for backward compat
 			assert.strictEqual(result, 'LineHeat: 🦄 Alice is also in UserForm.ts.');
+		});
+	});
+
+	suite('selectTargetFunctionId selects correct function for notification type', function () {
+		test('returns presence function when there is presence', () => {
+			const result = selectTargetFunctionId(
+				'createAdvancesSettlementTransactions',
+				'getAccountBalance',
+				true, // hasOtherPresence
+			);
+			assert.strictEqual(result, 'createAdvancesSettlementTransactions');
+		});
+
+		test('returns heat function when there is no presence', () => {
+			const result = selectTargetFunctionId(
+				'createAdvancesSettlementTransactions',
+				'getAccountBalance',
+				false, // hasOtherPresence
+			);
+			assert.strictEqual(result, 'getAccountBalance');
+		});
+
+		test('returns presence function even when heat function exists', () => {
+			// This is the key bug case: user is present in one function but edited another
+			const result = selectTargetFunctionId(
+				'validateForm', // where user is present
+				'submitForm', // where user made edits
+				true, // hasOtherPresence - showing presence notification
+			);
+			assert.strictEqual(result, 'validateForm');
+		});
+
+		test('returns undefined when presence function is undefined and has presence', () => {
+			const result = selectTargetFunctionId(
+				undefined,
+				'getAccountBalance',
+				true,
+			);
+			assert.strictEqual(result, undefined);
+		});
+
+		test('returns undefined when heat function is undefined and no presence', () => {
+			const result = selectTargetFunctionId(
+				'createAdvancesSettlementTransactions',
+				undefined,
+				false,
+			);
+			assert.strictEqual(result, undefined);
+		});
+
+		test('returns undefined when both functions are undefined', () => {
+			const result = selectTargetFunctionId(undefined, undefined, true);
+			assert.strictEqual(result, undefined);
 		});
 	});
 });

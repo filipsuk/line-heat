@@ -16,6 +16,19 @@ export type NotificationResult = {
 };
 
 /**
+ * Selects the appropriate function ID based on notification type.
+ * When there's presence, use the presence function; otherwise use the heat function.
+ * This ensures the notification message references the correct function.
+ */
+export const selectTargetFunctionId = (
+	presenceFunctionId: string | undefined,
+	heatFunctionId: string | undefined,
+	hasOtherPresence: boolean,
+): string | undefined => {
+	return hasOtherPresence ? presenceFunctionId : heatFunctionId;
+};
+
+/**
  * Extracts the last segment of a function path (the method name).
  * e.g., "ClassName/methodName" -> "methodName"
  *       "UserForm/Component/render" -> "render"

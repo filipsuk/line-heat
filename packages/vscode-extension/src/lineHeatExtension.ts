@@ -32,7 +32,7 @@ import {
 import { resolveRepoContext } from './repo';
 import { HeatCodeLensProvider } from './heatCodeLensProvider';
 import { checkAndShowOnboarding, openWalkthrough } from './onboarding';
-import { buildNotificationMessage, type NotificationResult } from './notification';
+import { buildNotificationMessage, selectTargetFunctionId, type NotificationResult } from './notification';
 
 const USER_ID_KEY = 'lineheat.userId';
 
@@ -177,8 +177,9 @@ const maybeNotifyPresenceConflict = async (
 		}
 	}
 
-	// Track the most recent activity for navigation
-	let mostRecentFunctionId: string | undefined;
+	// Track activity for navigation - separate for presence and heat
+	let presenceFunctionId: string | undefined;
+	let heatFunctionId: string | undefined;
 	let mostRecentEditAt = 0;
 
 	// Check for other users' presence (exclude self)
@@ -191,8 +192,8 @@ const maybeNotifyPresenceConflict = async (
 					otherPresenceUsers.push({ emoji: user.emoji, displayName: user.displayName });
 				}
 				// Track first presence location for navigation
-				if (!mostRecentFunctionId) {
-					mostRecentFunctionId = hashToFunctionId.get(hashedFunctionId);
+				if (!presenceFunctionId) {
+					presenceFunctionId = hashToFunctionId.get(hashedFunctionId);
 				}
 			}
 		}
@@ -213,15 +214,20 @@ const maybeNotifyPresenceConflict = async (
 				// Track most recent edit for navigation
 				if (editor.lastEditAt > mostRecentEditAt) {
 					mostRecentEditAt = editor.lastEditAt;
-					mostRecentFunctionId = hashToFunctionId.get(hashedFunctionId);
+					heatFunctionId = hashToFunctionId.get(hashedFunctionId);
 				}
 			}
 		}
 	}
 
+	// Use presence function if showing presence notification, otherwise heat function
+	// (presence takes priority in buildNotificationMessage when both exist)
+	const hasOtherPresence = otherPresenceUsers.length > 0;
+	const targetFunctionId = selectTargetFunctionId(presenceFunctionId, heatFunctionId, hasOtherPresence);
+
 	// Resolve function name and anchor line from function index (same as CodeLens)
-	const functionName = mostRecentFunctionId ? formatFunctionLabel(mostRecentFunctionId) : undefined;
-	const functionEntries = mostRecentFunctionId && functionIndex ? functionIndex.get(mostRecentFunctionId) : undefined;
+	const functionName = targetFunctionId ? formatFunctionLabel(targetFunctionId) : undefined;
+	const functionEntries = targetFunctionId && functionIndex ? functionIndex.get(targetFunctionId) : undefined;
 	const functionAnchorLine = functionEntries?.[0]?.anchorLine;
 
 	// Calculate decay in milliseconds from settings
