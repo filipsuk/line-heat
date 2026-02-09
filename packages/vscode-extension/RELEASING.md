@@ -24,6 +24,7 @@ npm version 0.1.0 -w lineheat-vscode --no-git-tag-version
 
 # 2. Commit
 git add packages/vscode-extension/package.json
+git add package-lock.json
 git commit -m "chore: bump version to 0.1.0"
 
 # 3. Tag and push (tag must include -pre suffix)
