@@ -31,7 +31,7 @@ suite('notification utilities', function () {
 				filename: 'UserForm.ts',
 				functionName: 'validateForm',
 			});
-			assert.strictEqual(result, 'LineHeat: 🦄 Alice is in validateForm in UserForm.ts.');
+			assert.strictEqual(result, 'LineHeat: 🦄 Alice is in `validateForm` in UserForm.ts.');
 		});
 
 		test('returns plural message for two users with presence', () => {
@@ -58,7 +58,7 @@ suite('notification utilities', function () {
 				filename: 'UserForm.ts',
 				functionName: 'validateForm',
 			});
-			assert.strictEqual(result, 'LineHeat: 🦄 Alice, 🐱 Bob are in validateForm in UserForm.ts.');
+			assert.strictEqual(result, 'LineHeat: 🦄 Alice, 🐱 Bob are in `validateForm` in UserForm.ts.');
 		});
 
 		test('truncates to 3 users for presence', () => {
@@ -100,7 +100,7 @@ suite('notification utilities', function () {
 				filename: 'UserForm.ts',
 				functionName: 'validateForm',
 			});
-			assert.strictEqual(result, 'LineHeat: 🦄 Alice made changes to validateForm in UserForm.ts 5m ago.');
+			assert.strictEqual(result, 'LineHeat: 🦄 Alice made changes to `validateForm` in UserForm.ts 5m ago.');
 		});
 
 		test('returns plural message for two users with changes showing most recent time', () => {
@@ -135,7 +135,7 @@ suite('notification utilities', function () {
 				filename: 'UserForm.ts',
 				functionName: 'submitHandler',
 			});
-			assert.strictEqual(result, 'LineHeat: 🦄 Alice, 🐱 Bob, 🐶 Carol made changes to submitHandler in UserForm.ts 2m ago.');
+			assert.strictEqual(result, 'LineHeat: 🦄 Alice, 🐱 Bob, 🐶 Carol made changes to `submitHandler` in UserForm.ts 2m ago.');
 		});
 
 		test('shows "now" for very recent changes', () => {
@@ -179,7 +179,7 @@ suite('notification utilities', function () {
 				filename: 'UserForm.ts',
 				functionName: 'validateForm',
 			});
-			assert.strictEqual(result, 'LineHeat: 🦄 Alice is in validateForm in UserForm.ts.');
+			assert.strictEqual(result, 'LineHeat: 🦄 Alice is in `validateForm` in UserForm.ts.');
 		});
 	});
 
@@ -260,7 +260,7 @@ suite('notification utilities', function () {
 				filename: 'LoanRepaymentScheduleEntity.ts',
 				functionName: 'LoanRepaymentScheduleEntity/findFullPrincipalRepaymentInstallments',
 			});
-			assert.strictEqual(result, 'LineHeat: 🦄 Alice is in findFullPrincipalRepaymentInstallments in LoanRepaymentScheduleEntity.ts.');
+			assert.strictEqual(result, 'LineHeat: 🦄 Alice is in `findFullPrincipalRepaymentInstallments` in LoanRepaymentScheduleEntity.ts.');
 		});
 
 		test('shows only method name for nested paths', () => {
@@ -273,7 +273,7 @@ suite('notification utilities', function () {
 				filename: 'UserForm.ts',
 				functionName: 'UserForm/Component/render',
 			});
-			assert.strictEqual(result, 'LineHeat: 🦄 Alice made changes to render in UserForm.ts 5m ago.');
+			assert.strictEqual(result, 'LineHeat: 🦄 Alice made changes to `render` in UserForm.ts 5m ago.');
 		});
 
 		test('keeps simple function name as-is', () => {
@@ -284,7 +284,7 @@ suite('notification utilities', function () {
 				filename: 'utils.ts',
 				functionName: 'calculateTotal',
 			});
-			assert.strictEqual(result, 'LineHeat: 🦄 Alice is in calculateTotal in utils.ts.');
+			assert.strictEqual(result, 'LineHeat: 🦄 Alice is in `calculateTotal` in utils.ts.');
 		});
 	});
 
@@ -301,7 +301,7 @@ suite('notification utilities', function () {
 				anchorLine: 42,
 			});
 			assert.ok(result !== null && typeof result === 'object');
-			assert.strictEqual(result.message, 'LineHeat: 🦄 Alice made changes to validateForm in UserForm.ts 5m ago.');
+			assert.strictEqual(result.message, 'LineHeat: 🦄 Alice made changes to `validateForm` in UserForm.ts 5m ago.');
 			assert.strictEqual(result.anchorLine, 42);
 		});
 
@@ -315,7 +315,7 @@ suite('notification utilities', function () {
 				anchorLine: 15,
 			});
 			assert.ok(result !== null && typeof result === 'object');
-			assert.strictEqual(result.message, 'LineHeat: 🦄 Alice is in validateForm in UserForm.ts.');
+			assert.strictEqual(result.message, 'LineHeat: 🦄 Alice is in `validateForm` in UserForm.ts.');
 			assert.strictEqual(result.anchorLine, 15);
 		});
 
