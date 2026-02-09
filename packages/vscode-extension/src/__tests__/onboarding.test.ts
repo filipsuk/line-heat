@@ -2,11 +2,10 @@ import * as assert from 'assert';
 
 import {
 	checkAndShowOnboarding,
-	openWalkthrough,
+	openSettings,
 	ONBOARDING_DISMISSED_KEY,
 	ONBOARDING_LATER_TIMESTAMP_KEY,
 	REMINDER_HOURS,
-	WALKTHROUGH_ID,
 	type OnboardingDeps,
 } from '../onboarding';
 import { type LineHeatLogger, type LineHeatSettings } from '../types';
@@ -193,27 +192,30 @@ suite('onboarding', function () {
 			);
 		});
 
-		test('opens walkthrough when user clicks "Open Setup Guide"', async () => {
+		test('opens settings when user clicks "Open Settings"', async () => {
 			const logger = createMockLogger();
 			const context = createMockContext();
-			let walkthroughOpened = false;
+			let settingsOpened = false;
 			let executedCommand = '';
+			let executedArgs: unknown[] = [];
 
 			const deps = createMockDeps({
-				showNotification: async () => 'Open Setup Guide',
-				executeCommand: async (command: string) => {
+				showNotification: async () => 'Open Settings',
+				executeCommand: async (command: string, ...args: unknown[]) => {
 					executedCommand = command;
-					walkthroughOpened = true;
+					executedArgs = args;
+					settingsOpened = true;
 				},
 			});
 
 			await checkAndShowOnboarding(context as any, logger, deps);
 
-			assert.strictEqual(walkthroughOpened, true, 'Walkthrough should be opened');
-			assert.strictEqual(executedCommand, 'workbench.action.openWalkthrough');
+			assert.strictEqual(settingsOpened, true, 'Settings should be opened');
+			assert.strictEqual(executedCommand, 'workbench.action.openSettings');
+			assert.strictEqual(executedArgs[0], 'lineheat.');
 			assert.ok(
-				logger.logs.some((log) => log.includes('open-walkthrough')),
-				'Should log action as open-walkthrough'
+				logger.logs.some((log) => log.includes('open-settings')),
+				'Should log action as open-settings'
 			);
 		});
 
@@ -310,8 +312,8 @@ suite('onboarding', function () {
 		});
 	});
 
-	suite('openWalkthrough', function () {
-		test('executes walkthrough command with correct ID', async () => {
+	suite('openSettings', function () {
+		test('executes openSettings command with lineheat query', async () => {
 			let executedCommand = '';
 			let executedArgs: unknown[] = [];
 
@@ -322,22 +324,16 @@ suite('onboarding', function () {
 				},
 			};
 
-			await openWalkthrough(deps);
+			await openSettings(deps);
 
-			assert.strictEqual(executedCommand, 'workbench.action.openWalkthrough');
-			assert.strictEqual(executedArgs[0], WALKTHROUGH_ID);
-			assert.strictEqual(executedArgs[1], false);
+			assert.strictEqual(executedCommand, 'workbench.action.openSettings');
+			assert.strictEqual(executedArgs[0], 'lineheat.');
 		});
 	});
 
 	suite('constants', function () {
 		test('REMINDER_HOURS is 24', () => {
 			assert.strictEqual(REMINDER_HOURS, 24);
-		});
-
-		test('WALKTHROUGH_ID follows correct format', () => {
-			assert.ok(WALKTHROUGH_ID.includes('#'), 'Should contain # separator');
-			assert.ok(WALKTHROUGH_ID.startsWith('filipsuk.lineheat-vscode'), 'Should start with extension ID');
 		});
 	});
 });

@@ -47,6 +47,19 @@ export const readSettings = (): LineHeatSettings => {
 export const hasRequiredSettings = (settings: LineHeatSettings) =>
 	settings.serverUrl.length > 0 && settings.token.length > 0;
 
+export const initDisplayNameSetting = async (): Promise<void> => {
+	const config = vscode.workspace.getConfiguration('lineheat');
+	const current = normalizeString(config.get<string>('displayName'));
+	if (current) {
+		return;
+	}
+
+	const name = getGitUserNameSync() || os.userInfo().username;
+	if (name) {
+		await config.update('displayName', name, vscode.ConfigurationTarget.Global);
+	}
+};
+
 const normalizePath = (path: string): string => {
 	// Normalize backslashes to forward slashes for cross-platform matching
 	let normalized = path.replace(/\\/g, '/');

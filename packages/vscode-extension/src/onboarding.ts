@@ -5,7 +5,6 @@ import { type LineHeatLogger, type LineHeatSettings } from './types';
 
 export const ONBOARDING_DISMISSED_KEY = 'lineheat.onboardingDismissed';
 export const ONBOARDING_LATER_TIMESTAMP_KEY = 'lineheat.onboardingLaterTimestamp';
-export const WALKTHROUGH_ID = 'filipsuk.lineheat-vscode#lineheat.getStarted';
 export const REMINDER_HOURS = 24;
 
 export interface OnboardingDeps {
@@ -62,15 +61,15 @@ export const checkAndShowOnboarding = async (
 	logger.info('lineheat: onboarding:show reason=not-configured');
 
 	const selection = await deps.showNotification(
-		'LineHeat: Set up your token to see who\'s working on the same code.',
-		'Open Setup Guide',
+		'LineHeat: Configure your token to see who\'s working on the same code.',
+		'Open Settings',
 		'Later',
 		'Don\'t show again',
 	);
 
-	if (selection === 'Open Setup Guide') {
-		logger.info('lineheat: onboarding:action=open-walkthrough');
-		await openWalkthrough(deps);
+	if (selection === 'Open Settings') {
+		logger.info('lineheat: onboarding:action=open-settings');
+		await openSettings(deps);
 	} else if (selection === 'Later') {
 		logger.info('lineheat: onboarding:action=later');
 		await context.globalState.update(ONBOARDING_LATER_TIMESTAMP_KEY, deps.now());
@@ -80,10 +79,6 @@ export const checkAndShowOnboarding = async (
 	}
 };
 
-export const openWalkthrough = async (deps: Pick<OnboardingDeps, 'executeCommand'> = defaultDeps): Promise<void> => {
-	await deps.executeCommand(
-		'workbench.action.openWalkthrough',
-		WALKTHROUGH_ID,
-		false,
-	);
+export const openSettings = async (deps: Pick<OnboardingDeps, 'executeCommand'> = defaultDeps): Promise<void> => {
+	await deps.executeCommand('workbench.action.openSettings', 'lineheat.');
 };

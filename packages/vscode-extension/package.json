@@ -31,33 +31,39 @@
     "configuration": {
       "title": "LineHeat",
       "properties": {
-        "lineheat.serverUrl": {
-          "type": "string",
-          "default": "https://lineheat.filipsuk.cz:8787",
-          "description": "LineHeat server URL."
-        },
         "lineheat.token": {
+          "order": 1,
           "type": "string",
           "default": "",
-          "description": "Shared team token for LineHeat."
-        },
-        "lineheat.displayName": {
-          "type": "string",
-          "default": "",
-          "description": "Display name shared with teammates."
+          "description": "(required) Shared team token for LineHeat."
         },
         "lineheat.emoji": {
+          "order": 2,
           "type": "string",
           "default": "🙂",
           "description": "Emoji shown next to your name."
         },
+        "lineheat.displayName": {
+          "order": 3,
+          "type": "string",
+          "default": "",
+          "description": "Display name shared with teammates."
+        },
         "lineheat.heatDecayHours": {
+          "order": 4,
           "type": "number",
           "default": 72,
           "minimum": 1,
           "description": "Hours before heat fully decays."
         },
+        "lineheat.serverUrl": {
+          "order": 5,
+          "type": "string",
+          "default": "https://lineheat.filipsuk.cz:8787",
+          "description": "LineHeat server URL."
+        },
         "lineheat.logLevel": {
+          "order": 6,
           "type": "string",
           "default": "info",
           "enum": [
@@ -69,12 +75,14 @@
           "description": "LineHeat log verbosity."
         },
         "lineheat.presenceNotificationCooldownMinutes": {
+          "order": 7,
           "type": "number",
           "default": 15,
           "minimum": 0,
           "description": "Minimum time (in minutes) between presence conflict notifications for the same file. Set to 0 to disable notifications."
         },
         "lineheat.enabledRepositories": {
+          "order": 8,
           "type": "array",
           "items": {
             "type": "string"
@@ -90,40 +98,8 @@
         "title": "LineHeat: Enable for this repository"
       },
       {
-        "command": "lineheat.openWalkthrough",
-        "title": "LineHeat: Open Setup Guide"
-      }
-    ],
-    "walkthroughs": [
-      {
-        "id": "lineheat.getStarted",
-        "title": "Get Started with LineHeat",
-        "description": "See who's working on the same code in real-time",
-        "steps": [
-          {
-            "id": "configureToken",
-            "title": "Configure your token",
-            "description": "Get a shared token from your team lead and paste it in the settings.\n\n[Open Token Settings](command:workbench.action.openSettings?%5B%22lineheat.token%22%5D)",
-            "media": {
-              "markdown": "Your team shares one token to see each other's presence. Once configured, LineHeat will connect automatically."
-            },
-            "completionEvents": [
-              "onSettingChanged:lineheat.token"
-            ]
-          },
-          {
-            "id": "personalize",
-            "title": "Personalize your presence",
-            "description": "Set your display name and emoji so teammates recognize you.\n\n[Open Display Name Settings](command:workbench.action.openSettings?%5B%22lineheat.displayName%22%5D)",
-            "media": {
-              "markdown": "Pick a fun emoji to stand out!"
-            },
-            "completionEvents": [
-              "onSettingChanged:lineheat.displayName",
-              "onSettingChanged:lineheat.emoji"
-            ]
-          }
-        ]
+        "command": "lineheat.openSettings",
+        "title": "LineHeat: Open Settings"
       }
     ]
   },

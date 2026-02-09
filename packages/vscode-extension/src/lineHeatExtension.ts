@@ -22,7 +22,7 @@ import {
 
 import { createLogger } from './logger';
 import { formatFunctionLabel } from './format';
-import { hasRequiredSettings, initGitUserName, isRepositoryEnabled, readSettings } from './settings';
+import { hasRequiredSettings, initDisplayNameSetting, initGitUserName, isRepositoryEnabled, readSettings } from './settings';
 import {
 	getDocumentFunctionIndex,
 	getDocumentSymbols,
@@ -31,7 +31,7 @@ import {
 } from './symbols';
 import { resolveRepoContext } from './repo';
 import { HeatCodeLensProvider } from './heatCodeLensProvider';
-import { checkAndShowOnboarding, openWalkthrough } from './onboarding';
+import { checkAndShowOnboarding, openSettings } from './onboarding';
 import { buildNotificationMessage, selectTargetFunctionId, type NotificationResult } from './notification';
 
 const USER_ID_KEY = 'lineheat.userId';
@@ -323,7 +323,8 @@ const updateStatusBar = () => {
 
 	if (!hasRequiredSettings(currentSettings)) {
 		statusBarItem.text = '$(flame) LineHeat (Not Configured)';
-		statusBarItem.tooltip = 'LineHeat is disabled. Configure server URL and token.';
+		statusBarItem.tooltip = 'LineHeat: Token not configured. Click to open settings.';
+		statusBarItem.command = 'lineheat.openSettings';
 		return;
 	}
 
@@ -899,7 +900,7 @@ export function activate(context: vscode.ExtensionContext) {
 			await config.update('enabledRepositories', updatedPatterns, vscode.ConfigurationTarget.Global);
 			void vscode.window.showInformationMessage(`LineHeat: Enabled for repository: ${gitRoot}`);
 		}),
-		vscode.commands.registerCommand('lineheat.openWalkthrough', openWalkthrough),
+		vscode.commands.registerCommand('lineheat.openSettings', openSettings),
 		{ dispose: () => {
 			heatCodeLensProvider = undefined;
 		} },
@@ -992,6 +993,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	void ensureUserId(context).then(async () => {
 		await initGitUserName();
+		await initDisplayNameSetting();
 		await loadProtocol();
 		refreshConnection(logger);
 
