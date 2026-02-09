@@ -183,6 +183,111 @@ suite('notification utilities', function () {
 		});
 	});
 
+	suite('buildNotificationMessage respects heat decay', function () {
+		test('filters out editors older than decayMs', () => {
+			const now = Date.now();
+			const oneHourAgo = now - 60 * 60 * 1000;
+			const fiveHoursAgo = now - 5 * 60 * 60 * 1000;
+			const decayMs = 3 * 60 * 60 * 1000; // 3 hours
+			const result = buildNotificationMessage({
+				otherPresenceUsers: [],
+				recentEditors: [
+					{ emoji: '🦄', displayName: 'Alice', lastEditAt: oneHourAgo },
+					{ emoji: '🐱', displayName: 'Bob', lastEditAt: fiveHoursAgo }, // Should be filtered
+				],
+				now,
+				filename: 'UserForm.ts',
+				decayMs,
+			});
+			assert.strictEqual(result, 'LineHeat: 🦄 Alice made changes in UserForm.ts 1h ago.');
+		});
+
+		test('returns null when all editors are older than decayMs', () => {
+			const now = Date.now();
+			const fiveHoursAgo = now - 5 * 60 * 60 * 1000;
+			const decayMs = 3 * 60 * 60 * 1000; // 3 hours
+			const result = buildNotificationMessage({
+				otherPresenceUsers: [],
+				recentEditors: [
+					{ emoji: '🦄', displayName: 'Alice', lastEditAt: fiveHoursAgo },
+				],
+				now,
+				filename: 'UserForm.ts',
+				decayMs,
+			});
+			assert.strictEqual(result, null);
+		});
+
+		test('shows all editors when decayMs is not provided', () => {
+			const now = Date.now();
+			const fiveDaysAgo = now - 5 * 24 * 60 * 60 * 1000;
+			const result = buildNotificationMessage({
+				otherPresenceUsers: [],
+				recentEditors: [
+					{ emoji: '🦄', displayName: 'Alice', lastEditAt: fiveDaysAgo },
+				],
+				now,
+				filename: 'UserForm.ts',
+			});
+			assert.strictEqual(result, 'LineHeat: 🦄 Alice made changes in UserForm.ts 5d ago.');
+		});
+
+		test('uses most recent time from non-filtered editors', () => {
+			const now = Date.now();
+			const twoHoursAgo = now - 2 * 60 * 60 * 1000;
+			const fourHoursAgo = now - 4 * 60 * 60 * 1000;
+			const decayMs = 3 * 60 * 60 * 1000; // 3 hours
+			const result = buildNotificationMessage({
+				otherPresenceUsers: [],
+				recentEditors: [
+					{ emoji: '🦄', displayName: 'Alice', lastEditAt: twoHoursAgo },
+					{ emoji: '🐱', displayName: 'Bob', lastEditAt: fourHoursAgo }, // Should be filtered
+				],
+				now,
+				filename: 'UserForm.ts',
+				decayMs,
+			});
+			assert.strictEqual(result, 'LineHeat: 🦄 Alice made changes in UserForm.ts 2h ago.');
+		});
+	});
+
+	suite('buildNotificationMessage extracts method name from function path', function () {
+		test('shows only method name when functionName contains class path', () => {
+			const result = buildNotificationMessage({
+				otherPresenceUsers: [{ emoji: '🦄', displayName: 'Alice' }],
+				recentEditors: [],
+				now: Date.now(),
+				filename: 'LoanRepaymentScheduleEntity.ts',
+				functionName: 'LoanRepaymentScheduleEntity/findFullPrincipalRepaymentInstallments',
+			});
+			assert.strictEqual(result, 'LineHeat: 🦄 Alice is in findFullPrincipalRepaymentInstallments in LoanRepaymentScheduleEntity.ts.');
+		});
+
+		test('shows only method name for nested paths', () => {
+			const now = Date.now();
+			const fiveMinutesAgo = now - 5 * 60 * 1000;
+			const result = buildNotificationMessage({
+				otherPresenceUsers: [],
+				recentEditors: [{ emoji: '🦄', displayName: 'Alice', lastEditAt: fiveMinutesAgo }],
+				now,
+				filename: 'UserForm.ts',
+				functionName: 'UserForm/Component/render',
+			});
+			assert.strictEqual(result, 'LineHeat: 🦄 Alice made changes to render in UserForm.ts 5m ago.');
+		});
+
+		test('keeps simple function name as-is', () => {
+			const result = buildNotificationMessage({
+				otherPresenceUsers: [{ emoji: '🦄', displayName: 'Alice' }],
+				recentEditors: [],
+				now: Date.now(),
+				filename: 'utils.ts',
+				functionName: 'calculateTotal',
+			});
+			assert.strictEqual(result, 'LineHeat: 🦄 Alice is in calculateTotal in utils.ts.');
+		});
+	});
+
 	suite('buildNotificationMessage returns navigation info', function () {
 		test('returns anchorLine for navigation when provided', () => {
 			const now = Date.now();

@@ -225,6 +225,10 @@ const maybeNotifyPresenceConflict = async (
 	// Resolve function name from functionId
 	const functionName = mostRecentFunctionId ? formatFunctionLabel(mostRecentFunctionId) : undefined;
 
+	// Calculate decay in milliseconds from settings
+	const decayHours = currentSettings.heatDecayHours ?? 72;
+	const decayMs = decayHours > 0 ? decayHours * 60 * 60 * 1000 : undefined;
+
 	const result = buildNotificationMessage({
 		otherPresenceUsers,
 		recentEditors,
@@ -232,6 +236,7 @@ const maybeNotifyPresenceConflict = async (
 		filename,
 		functionName,
 		anchorLine: mostRecentAnchorLine,
+		decayMs,
 	});
 
 	if (!result) {

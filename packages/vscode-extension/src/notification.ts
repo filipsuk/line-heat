@@ -7,11 +7,26 @@ export type NotificationInput = {
 	filename: string;
 	functionName?: string;
 	anchorLine?: number;
+	decayMs?: number;
 };
 
 export type NotificationResult = {
 	message: string;
 	anchorLine: number;
+};
+
+/**
+ * Extracts the last segment of a function path (the method name).
+ * e.g., "ClassName/methodName" -> "methodName"
+ *       "UserForm/Component/render" -> "render"
+ *       "calculateTotal" -> "calculateTotal"
+ */
+const extractMethodName = (functionName: string): string => {
+	const lastSlashIndex = functionName.lastIndexOf('/');
+	if (lastSlashIndex >= 0) {
+		return functionName.slice(lastSlashIndex + 1);
+	}
+	return functionName;
 };
 
 /**
@@ -25,7 +40,13 @@ export type NotificationResult = {
 export const buildNotificationMessage = (
 	input: NotificationInput,
 ): string | NotificationResult | null => {
-	const { otherPresenceUsers, recentEditors, now, filename, functionName, anchorLine } = input;
+	const { otherPresenceUsers, now, filename, functionName, anchorLine, decayMs } = input;
+	let { recentEditors } = input;
+
+	// Filter editors by decay time if decayMs is provided
+	if (decayMs !== undefined) {
+		recentEditors = recentEditors.filter((e) => now - e.lastEditAt <= decayMs);
+	}
 
 	const hasOtherPresence = otherPresenceUsers.length > 0;
 	const hasRecentActivity = recentEditors.length > 0;
@@ -33,6 +54,9 @@ export const buildNotificationMessage = (
 	if (!hasOtherPresence && !hasRecentActivity) {
 		return null;
 	}
+
+	// Extract only the method name from the function path
+	const methodName = functionName ? extractMethodName(functionName) : undefined;
 
 	let message: string;
 
@@ -42,10 +66,10 @@ export const buildNotificationMessage = (
 			.map((u) => `${u.emoji} ${u.displayName}`)
 			.join(', ');
 
-		if (functionName) {
+		if (methodName) {
 			// With function name: "is in validateForm in UserForm.ts"
 			const verb = otherPresenceUsers.length === 1 ? 'is' : 'are';
-			message = `LineHeat: ${userLabels} ${verb} in ${functionName} in ${filename}.`;
+			message = `LineHeat: ${userLabels} ${verb} in ${methodName} in ${filename}.`;
 		} else {
 			// Without function name: "is also in UserForm.ts"
 			const verb = otherPresenceUsers.length === 1 ? 'is' : 'are';
@@ -62,9 +86,9 @@ export const buildNotificationMessage = (
 		const mostRecentEditAt = Math.max(...recentEditors.map((e) => e.lastEditAt));
 		const timeAgo = formatRelativeTime(now, mostRecentEditAt);
 
-		if (functionName) {
+		if (methodName) {
 			// With function name: "made changes to validateForm in UserForm.ts 5m ago"
-			message = `LineHeat: ${editorLabels} made changes to ${functionName} in ${filename} ${timeAgo}.`;
+			message = `LineHeat: ${editorLabels} made changes to ${methodName} in ${filename} ${timeAgo}.`;
 		} else {
 			// Without function name: "made changes in UserForm.ts 5m ago"
 			message = `LineHeat: ${editorLabels} made changes in ${filename} ${timeAgo}.`;
