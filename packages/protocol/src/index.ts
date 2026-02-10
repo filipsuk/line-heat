@@ -1,6 +1,6 @@
 import type { HashVersion } from "./hash.js";
 
-export const PROTOCOL_VERSION = "2.0.0" as const;
+export const PROTOCOL_VERSION = "2.1.0" as const;
 export const MIN_CLIENT_PROTOCOL_VERSION = "2.0.0" as const;
 
 export const PRESENCE_TTL_SECONDS = 15 as const;
@@ -18,6 +18,7 @@ export const EVENT_SERVER_HELLO = "server:hello" as const;
 export const EVENT_SERVER_INCOMPATIBLE = "server:incompatible" as const;
 export const EVENT_ROOM_SNAPSHOT = "room:snapshot" as const;
 export const EVENT_FILE_DELTA = "file:delta" as const;
+export const EVENT_REPO_HEAT = "repo:heat" as const;
 
 export type HandshakeAuthPayload = {
   token: string;
@@ -142,17 +143,26 @@ export type RoomSnapshotPayload = {
 };
 
 export type FileDeltaPayload = {
-  /**
-   * Required. repoId/filePath/functionId must be SHA-256 hex (64 lowercase),
-   * and hashVersion must match HASH_VERSION (sha256-hex-v1).
-   */
-  hashVersion: HashVersion;
-  repoId: string;
-  filePath: string;
-  updates: {
-    heat?: HeatFunction[];
-    presence?: PresenceFunction[];
-  };
+   /**
+    * Required. repoId/filePath/functionId must be SHA-256 hex (64 lowercase),
+    * and hashVersion must match HASH_VERSION (sha256-hex-v1).
+    */
+   hashVersion: HashVersion;
+   repoId: string;
+   filePath: string;
+   updates: {
+     heat?: HeatFunction[];
+     presence?: PresenceFunction[];
+   };
+};
+
+export type RepoHeatPayload = {
+   hashVersion: HashVersion;
+   repoId: string;
+};
+
+export type RepoHeatResponse = {
+   files: Record<string, number>; // key = hashed filePath, value = lastEditAt (ms)
 };
 
 export { HASH_VERSION, sha256Hex } from "./hash.js";
