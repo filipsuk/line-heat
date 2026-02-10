@@ -4,6 +4,8 @@ import type { Socket } from 'socket.io';
 
 import type {
 	FileDeltaPayload,
+	RepoHeatPayload,
+	RepoHeatResponse,
 	RoomJoinPayload,
 	RoomSnapshotPayload,
 	ServerHelloPayload,
@@ -36,6 +38,7 @@ export type MockLineHeatServer = {
 	}) => Promise<JoinedRoom>;
 	emitRoomSnapshot: (payload: RoomSnapshotPayload) => void;
 	emitFileDelta: (payload: FileDeltaPayload) => void;
+	disconnectAllClients: () => void;
 	close: () => Promise<void>;
 };
 
@@ -48,6 +51,7 @@ export const startMockLineHeatServer = async (params: {
 		room: MockLineHeatRoom;
 		auth: MockLineHeatAuth | undefined;
 	}) => RoomSnapshotPayload;
+	repoHeatHandler?: (payload: RepoHeatPayload, auth: MockLineHeatAuth | undefined) => RepoHeatResponse;
 }): Promise<MockLineHeatServer> => {
 	const protocol = await import('@line-heat/protocol');
 
@@ -107,6 +111,18 @@ export const startMockLineHeatServer = async (params: {
 				socket.emit(protocol.EVENT_ROOM_SNAPSHOT, snapshot);
 			}
 			flushJoinWaiters();
+		});
+		socket.on(protocol.EVENT_REPO_HEAT, (payload: RepoHeatPayload, ack: ((response: RepoHeatResponse) => void) | undefined) => {
+			if (params.repoHeatHandler) {
+				const response = params.repoHeatHandler(payload, lastAuth);
+				if (typeof ack === 'function') {
+					ack(response);
+				}
+			} else {
+				if (typeof ack === 'function') {
+					ack({ files: {} });
+				}
+			}
 		});
 	});
 
@@ -168,12 +184,17 @@ export const startMockLineHeatServer = async (params: {
 		joinQueue = [];
 	};
 
+	const disconnectAllClients = () => {
+		io.disconnectSockets();
+	};
+
 	return {
 		serverUrl,
 		getLastAuth: () => lastAuth,
 		waitForRoomJoin,
 		emitRoomSnapshot,
 		emitFileDelta,
+		disconnectAllClients,
 		close,
 	};
 };
