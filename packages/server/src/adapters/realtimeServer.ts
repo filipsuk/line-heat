@@ -6,6 +6,7 @@ import {
   EVENT_FILE_DELTA,
   EVENT_PRESENCE_CLEAR,
   EVENT_PRESENCE_SET,
+  EVENT_REPO_HEAT,
   EVENT_ROOM_JOIN,
   EVENT_ROOM_LEAVE,
   EVENT_ROOM_SNAPSHOT,
@@ -24,6 +25,8 @@ import type {
   PresenceClearPayload,
   PresenceSetPayload,
   RoomJoinAck,
+  RepoHeatPayload,
+  RepoHeatResponse,
   RoomJoinPayload,
   RoomLeavePayload,
   ServerHelloPayload,
@@ -466,6 +469,53 @@ export const attachRealtimeServer = (options: RealtimeServerOptions) => {
         }, payload.hashVersion);
       }
     });
+
+    socket.on(
+      EVENT_REPO_HEAT,
+      (payload: RepoHeatPayload, ack?: (response: RepoHeatResponse) => void) => {
+        if (typeof ack !== "function") {
+          return;
+        }
+
+        const empty: RepoHeatResponse = { files: {} };
+
+        if (
+          !payload ||
+          typeof payload !== "object" ||
+          typeof payload.repoId !== "string" ||
+          !HASH_HEX_RE.test(payload.repoId.trim()) ||
+          payload.hashVersion !== HASH_VERSION
+        ) {
+          ack(empty);
+          return;
+        }
+
+        const repoId = payload.repoId.trim();
+        const userId = socketUser.userId;
+        const files: Record<string, number> = {};
+
+        for (const [, roomState] of heatState) {
+          if (roomState.repoId !== repoId) {
+            continue;
+          }
+          let maxOtherEditAt: number | null = null;
+          for (const [, fn] of roomState.functions) {
+            for (const editor of fn.topEditors) {
+              if (editor.userId !== userId) {
+                if (maxOtherEditAt === null || editor.lastEditAt > maxOtherEditAt) {
+                  maxOtherEditAt = editor.lastEditAt;
+                }
+              }
+            }
+          }
+          if (maxOtherEditAt !== null) {
+            files[roomState.filePath] = maxOtherEditAt;
+          }
+        }
+
+        ack({ files });
+      }
+    );
 
     socket.on("disconnect", () => {
       logger.info("Client disconnected", {
