@@ -55,6 +55,7 @@ const createMockSettings = (overrides: Partial<LineHeatSettings> = {}): LineHeat
 	logLevel: 'info',
 	presenceNotificationCooldownMinutes: 15,
 	enabledRepositories: [],
+	explorerDecorations: true,
 	...overrides,
 });
 

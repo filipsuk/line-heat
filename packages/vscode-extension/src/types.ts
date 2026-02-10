@@ -57,6 +57,7 @@ export type ProtocolModule = {
 	EVENT_SERVER_INCOMPATIBLE: string;
 	EVENT_ROOM_SNAPSHOT: string;
 	EVENT_FILE_DELTA: string;
+	EVENT_REPO_HEAT: string;
 };
 
 export type LineHeatSettings = {
@@ -68,6 +69,7 @@ export type LineHeatSettings = {
 	logLevel: LogLevel;
 	presenceNotificationCooldownMinutes: number;
 	enabledRepositories: string[];
+	explorerDecorations: boolean;
 };
 
 export type LineHeatLogger = {
