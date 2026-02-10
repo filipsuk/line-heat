@@ -89,6 +89,12 @@
           },
           "default": [],
           "description": "Glob patterns for repositories where LineHeat is enabled. Empty = enabled everywhere. Example: [\"/home/user/work/*\", \"**/company-*\"]"
+        },
+        "lineheat.explorerDecorations": {
+          "order": 9,
+          "type": "boolean",
+          "default": true,
+          "description": "Show heat decorations (🔥) on files in the Explorer."
         }
       }
     },

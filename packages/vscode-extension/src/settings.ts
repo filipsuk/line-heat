@@ -41,6 +41,7 @@ export const readSettings = (): LineHeatSettings => {
 		logLevel: config.get<LogLevel>('logLevel', 'info'),
 		presenceNotificationCooldownMinutes: config.get<number>('presenceNotificationCooldownMinutes', 15),
 		enabledRepositories: config.get<string[]>('enabledRepositories', []),
+		explorerDecorations: config.get<boolean>('explorerDecorations', true),
 	};
 };
 

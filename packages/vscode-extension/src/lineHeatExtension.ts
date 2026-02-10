@@ -31,6 +31,7 @@ import {
 } from './symbols';
 import { resolveRepoContext } from './repo';
 import { HeatCodeLensProvider } from './heatCodeLensProvider';
+import { HeatFileDecorationProvider } from './heatFileDecorationProvider';
 import { checkAndShowOnboarding, openSettings } from './onboarding';
 import { buildNotificationMessage, selectTargetFunctionId, type NotificationResult } from './notification';
 
@@ -66,6 +67,12 @@ const maxSubscribedRooms = 10;
 const lastNotificationTimeByRoom = new Map<RoomKey, number>();
 
 let heatCodeLensProvider: HeatCodeLensProvider | undefined;
+let heatFileDecorationProvider: HeatFileDecorationProvider | undefined;
+
+let repoHeatMap: Map<string, Map<string, number>> | undefined;
+let repoHeatTimer: ReturnType<typeof setInterval> | undefined;
+let hashIndex: Map<string, Map<string, vscode.Uri>> | undefined;
+let lastRepoHeatEmitAt = 0;
 
 const isSameRoom = (left: RoomContext | undefined, right: RoomContext | undefined) =>
 	left?.repoId === right?.repoId && left?.filePath === right?.filePath;
@@ -394,6 +401,7 @@ const connectSocket = (
 		updateStatusBar();
 		void updateOpenRoomsFromTabs(logger);
 		void updateActiveEditorState(logger, vscode.window.activeTextEditor);
+		void buildHashIndex(logger).then(() => emitRepoHeat(logger));
 	});
 
 	socket.on('connect_error', (error) => {
@@ -429,6 +437,10 @@ const connectSocket = (
 	socket.on(protocol.EVENT_FILE_DELTA, (payload: FileDeltaPayload) => {
 		updateRoomStateFromDelta(payload);
 		heatCodeLensProvider?.refresh();
+		const sinceLastEmit = Date.now() - lastRepoHeatEmitAt;
+		if (sinceLastEmit >= 10_000) {
+			emitRepoHeat(logger);
+		}
 	});
 
 	socket.on('disconnect', (reason) => {
@@ -438,7 +450,9 @@ const connectSocket = (
 		activePresence = undefined;
 		roomStateByKey.clear();
 		roomKeyByHashedKey.clear();
+		repoHeatMap = undefined;
 		heatCodeLensProvider?.refresh();
+		heatFileDecorationProvider?.refresh();
 		updateStatusBar();
 	});
 
@@ -862,6 +876,85 @@ const updateRoomStateFromDelta = (payload: FileDeltaPayload) => {
 	roomStateByKey.set(roomKey, current);
 };
 
+const buildHashIndex = async (logger: LineHeatLogger) => {
+	if (!protocolModule) {
+		return;
+	}
+	const files = await vscode.workspace.findFiles('**/*', '**/node_modules/**');
+	const nextIndex = new Map<string, Map<string, vscode.Uri>>();
+	const results = await Promise.all(
+		files.map(async (uri) => {
+			if (uri.scheme !== 'file') {
+				return undefined;
+			}
+			const context = await resolveRepoContext(uri.fsPath, logger);
+			if (!context) {
+				return undefined;
+			}
+			return { uri, repoId: context.repoId, filePath: context.filePath };
+		}),
+	);
+	for (const result of results) {
+		if (!result) {
+			continue;
+		}
+		const hashedRepoId = protocolModule.sha256Hex(result.repoId);
+		const hashedFilePath = protocolModule.sha256Hex(result.filePath);
+		let fileMap = nextIndex.get(hashedRepoId);
+		if (!fileMap) {
+			fileMap = new Map();
+			nextIndex.set(hashedRepoId, fileMap);
+		}
+		fileMap.set(hashedFilePath, result.uri);
+	}
+	hashIndex = nextIndex;
+	logger.debug(`lineheat: hash-index:built files=${files.length} repos=${nextIndex.size}`);
+};
+
+const emitRepoHeat = (logger: LineHeatLogger) => {
+	if (!activeSocket?.connected || !protocolModule || !currentSettings?.explorerDecorations) {
+		return;
+	}
+	if (!hashIndex || hashIndex.size === 0) {
+		return;
+	}
+	lastRepoHeatEmitAt = Date.now();
+	const repoIds = new Set(hashIndex.keys());
+	for (const hashedRepoId of repoIds) {
+		activeSocket.emit(
+			protocolModule.EVENT_REPO_HEAT,
+			{ hashVersion: protocolModule.HASH_VERSION, repoId: hashedRepoId },
+			(response: { files: Record<string, number> }) => {
+				if (!repoHeatMap) {
+					repoHeatMap = new Map();
+				}
+				const fileHeat = new Map<string, number>();
+				for (const [hashedFilePath, lastEditAt] of Object.entries(response.files)) {
+					fileHeat.set(hashedFilePath, lastEditAt);
+				}
+				repoHeatMap.set(hashedRepoId, fileHeat);
+				heatFileDecorationProvider?.refresh();
+			},
+		);
+	}
+};
+
+const startRepoHeatPolling = (logger: LineHeatLogger) => {
+	if (repoHeatTimer) {
+		return;
+	}
+	repoHeatTimer = setInterval(() => {
+		emitRepoHeat(logger);
+	}, 60_000);
+};
+
+const stopRepoHeatPolling = () => {
+	if (repoHeatTimer) {
+		clearInterval(repoHeatTimer);
+		repoHeatTimer = undefined;
+	}
+};
+
 export function activate(context: vscode.ExtensionContext) {
 	const settings = readSettings();
 	const logger = createLogger(settings.logLevel);
@@ -903,6 +996,19 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('lineheat.openSettings', openSettings),
 		{ dispose: () => {
 			heatCodeLensProvider = undefined;
+		} },
+	);
+
+	heatFileDecorationProvider = new HeatFileDecorationProvider({
+		getLogger: () => activeLogger,
+		getSettings: () => currentSettings,
+		getRepoHeatMap: () => repoHeatMap,
+		getHashIndex: () => hashIndex,
+	});
+	context.subscriptions.push(
+		vscode.window.registerFileDecorationProvider(heatFileDecorationProvider),
+		{ dispose: () => {
+			heatFileDecorationProvider = undefined;
 		} },
 	);
 
@@ -968,6 +1074,7 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 		refreshConnection(logger);
 		heatCodeLensProvider?.refresh();
+		heatFileDecorationProvider?.refresh();
 	});
 
 	const onEditorDisposable = vscode.window.onDidChangeActiveTextEditor((editor) => {
@@ -991,13 +1098,32 @@ export function activate(context: vscode.ExtensionContext) {
 		})();
 	});
 
+	const onWindowStateDisposable = vscode.window.onDidChangeWindowState((state) => {
+		if (state.focused) {
+			emitRepoHeat(logger);
+			startRepoHeatPolling(logger);
+		} else {
+			stopRepoHeatPolling();
+		}
+	});
+
+	const onFileCreateDisposable = vscode.workspace.onDidCreateFiles(() => {
+		void buildHashIndex(logger);
+	});
+	const onFileDeleteDisposable = vscode.workspace.onDidDeleteFiles(() => {
+		void buildHashIndex(logger);
+	});
+	const onFileRenameDisposable = vscode.workspace.onDidRenameFiles(() => {
+		void buildHashIndex(logger);
+	});
+
 	void ensureUserId(context).then(async () => {
 		await initGitUserName();
 		await initDisplayNameSetting();
 		await loadProtocol();
 		refreshConnection(logger);
+		startRepoHeatPolling(logger);
 
-		// Show onboarding notification if not configured
 		void checkAndShowOnboarding(context, logger);
 	});
 	updateStatusBar();
@@ -1013,6 +1139,10 @@ export function activate(context: vscode.ExtensionContext) {
 		onEditorDisposable,
 		onTabDisposable,
 		onSelectionDisposable,
+		onWindowStateDisposable,
+		onFileCreateDisposable,
+		onFileDeleteDisposable,
+		onFileRenameDisposable,
 	);
 	return { logger: { lines: logger.lines, messages: logger.messages } };
 }
@@ -1041,5 +1171,11 @@ export function deactivate() {
 		clearInterval(presenceKeepaliveTimer);
 		presenceKeepaliveTimer = undefined;
 	}
+	stopRepoHeatPolling();
+	repoHeatMap = undefined;
+	hashIndex = undefined;
+	lastRepoHeatEmitAt = 0;
+	heatFileDecorationProvider?.refresh();
 	heatCodeLensProvider = undefined;
+	heatFileDecorationProvider = undefined;
 }
