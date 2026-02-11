@@ -841,11 +841,11 @@ const ensurePresenceKeepalive = (logger: LineHeatLogger) => {
 		return;
 	}
 	presenceKeepaliveTimer = setInterval(() => {
-		if (!activePresence || !activeSocket?.connected || !protocolModule) {
+		if (!activePresence || !activeSocket?.connected || !protocolModule || !vscode.window.state.focused) {
 			return;
 		}
 		emitPresenceSet(logger, activePresence);
-	}, 5000);
+	}, 15_000);
 };
 
 const updateRoomStateFromSnapshot = (payload: RoomSnapshotPayload) => {
