@@ -29,7 +29,7 @@ import {
 	resetSymbolState,
 	resolveFunctionInfo,
 } from './symbols';
-import { resolveRepoContext } from './repo';
+import { listTrackedFiles, resolveRepoContext } from './repo';
 import { HeatCodeLensProvider } from './heatCodeLensProvider';
 import { HeatFileDecorationProvider } from './heatFileDecorationProvider';
 import { checkAndShowOnboarding, openSettings } from './onboarding';
@@ -880,13 +880,18 @@ const buildHashIndex = async (logger: LineHeatLogger) => {
 	if (!protocolModule) {
 		return;
 	}
-	const files = await vscode.workspace.findFiles('**/*', '**/node_modules/**');
+	const start = Date.now();
+	const folders = vscode.workspace.workspaceFolders ?? [];
+	const files: vscode.Uri[] = [];
+	for (const folder of folders) {
+		const tracked = await listTrackedFiles(folder.uri.fsPath, logger);
+		for (const absPath of tracked) {
+			files.push(vscode.Uri.file(absPath));
+		}
+	}
 	const nextIndex = new Map<string, Map<string, vscode.Uri>>();
 	const results = await Promise.all(
 		files.map(async (uri) => {
-			if (uri.scheme !== 'file') {
-				return undefined;
-			}
 			const context = await resolveRepoContext(uri.fsPath, logger);
 			if (!context) {
 				return undefined;
@@ -908,7 +913,7 @@ const buildHashIndex = async (logger: LineHeatLogger) => {
 		fileMap.set(hashedFilePath, result.uri);
 	}
 	hashIndex = nextIndex;
-	logger.debug(`lineheat: hash-index:built files=${files.length} repos=${nextIndex.size}`);
+	logger.debug(`lineheat: hash-index:built files=${files.length} repos=${nextIndex.size} duration=${Date.now() - start}ms`);
 };
 
 const emitRepoHeat = (logger: LineHeatLogger) => {
