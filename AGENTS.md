@@ -44,7 +44,7 @@
 ## Editor/Agent Rules
 - For implementation requests: analyze current state, propose a clear plan, and get approval before making changes.
 - When appropriate, propose more than one implementation option.
-- Use conventional commit messages when asked to commit changes.
+- ALWAYS use conventional commit messages when committing.
 - Never push to remotes.
 - Commit only when explicitly asked.
 - No Cursor rules or Copilot instructions found in this repo.
