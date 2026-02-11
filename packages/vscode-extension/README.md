@@ -12,6 +12,7 @@ Unlike Git history, pull requests, or blame views, LineHeat focuses on **what is
 
 - Live activity intensity on individual **parts of code**
 - Recent edits by teammates, cooling over time
+- **Explorer decorations** on files and folders with recent teammate activity
 - Passive awareness without requiring a shared editing session
 
 LineHeat is **not** collaborative editing. It does not move your cursor, sync your view, or force pair programming.
@@ -38,10 +39,20 @@ LineHeat sits in between: asynchronous, ambient, low-friction. It provides aware
    - `lineheat.displayName` (required) - shown to teammates
    - `lineheat.emoji` (optional) - shown next to your name (default: 🙂)
    - `lineheat.heatDecayHours` (optional) - hours before heat fully decays (default: `72`)
+   - `lineheat.explorerDecorations` (optional) - show heat decorations on files/folders in the Explorer (default: `true`)
    - `lineheat.logLevel` (optional) - `error|warn|info|debug` (default: `info`)
    - `lineheat.serverUrl` (required) - use default host or your LineHeat server URL
 
 When connected, the status bar shows the server retention (example: `LineHeat: 7d`).
+
+## Explorer Decorations
+
+When enabled, LineHeat marks files and folders in the Explorer that have recent teammate activity:
+
+- **Files** show a fire emoji badge with a tooltip indicating how long ago the edit was (e.g. "Teammates edited 5m ago")
+- **Folders** show a subtle dot badge when they contain hot files, with the tooltip showing the most recent edit time
+
+This gives you an at-a-glance view of where your team is working without opening any files. Disable with `lineheat.explorerDecorations: false`.
 
 ## Privacy
 
