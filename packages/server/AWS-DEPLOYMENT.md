@@ -80,6 +80,10 @@ docker run -d \
   -e LINEHEAT_TOKEN=your-secure-token-here \
   -e LINEHEAT_RETENTION_DAYS=7 \
   -e LINEHEAT_DB_PATH=/data/lineheat.sqlite \
+  -e LOG_LEVEL=info \
+  --log-driver json-file \
+  --log-opt max-size=10m \
+  --log-opt max-file=5 \
   -v ./data:/data \
   -p 127.0.0.1:3000:8787 \
   lineheat-server
@@ -206,6 +210,10 @@ docker run -d \
   -e LINEHEAT_TOKEN=XXXXX \
   -e LINEHEAT_RETENTION_DAYS=7 \
   -e LINEHEAT_DB_PATH=/data/lineheat.sqlite \
+  -e LOG_LEVEL=info \
+  --log-driver json-file \
+  --log-opt max-size=10m \
+  --log-opt max-file=5 \
   -v ./data:/data \
   -p 127.0.0.1:3000:8787 \
   lineheat-server
