@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-import { computeHeatIntensity } from './format';
+import { computeHeatIntensity, formatRelativeTime } from './format';
 import { type LineHeatLogger, type LineHeatSettings } from './types';
 
 type HeatFileDecorationDeps = {
@@ -90,7 +90,7 @@ export class HeatFileDecorationProvider implements vscode.FileDecorationProvider
 				if (intensity >= HEAT_THRESHOLD) {
 					const decoration = new vscode.FileDecoration(
 						'\u{1F525}',
-						'Teammates edited recently',
+						`Teammates edited ${formatRelativeTime(now, lastEditAt)}`,
 					);
 					decoration.propagate = true;
 					return decoration;

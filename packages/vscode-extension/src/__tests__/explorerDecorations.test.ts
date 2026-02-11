@@ -47,7 +47,7 @@ suite('Explorer Heat Decorations', function () {
 		const decoration = provider.provideFileDecoration(fileUri);
 		assert.ok(decoration, 'Expected a decoration for hot file');
 		assert.strictEqual(decoration.badge, '\u{1F525}', 'Expected fire emoji badge');
-		assert.strictEqual(decoration.tooltip, 'Teammates edited recently');
+		assert.strictEqual(decoration.tooltip, 'Teammates edited 5m ago');
 		assert.strictEqual(decoration.propagate, true, 'Expected propagate=true for folder rollup');
 	});
 
