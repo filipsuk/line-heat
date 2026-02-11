@@ -72,6 +72,7 @@ let heatFileDecorationProvider: HeatFileDecorationProvider | undefined;
 let repoHeatMap: Map<string, Map<string, number>> | undefined;
 let repoHeatTimer: ReturnType<typeof setInterval> | undefined;
 let hashIndex: Map<string, Map<string, vscode.Uri>> | undefined;
+let slowRetryTimer: ReturnType<typeof setTimeout> | undefined;
 let lastRepoHeatEmitAt = 0;
 
 const isSameRoom = (left: RoomContext | undefined, right: RoomContext | undefined) =>
@@ -359,7 +360,15 @@ const updateStatusBar = () => {
 
 const getDefaultRetentionDays = () => protocolModule?.DEFAULT_RETENTION_DAYS ?? 7;
 
+const clearSlowRetry = () => {
+	if (slowRetryTimer) {
+		clearTimeout(slowRetryTimer);
+		slowRetryTimer = undefined;
+	}
+};
+
 const disconnectSocket = () => {
+	clearSlowRetry();
 	if (!activeSocket) {
 		return;
 	}
@@ -396,6 +405,7 @@ const connectSocket = (
 	});
 
 	socket.on('connect', () => {
+		clearSlowRetry();
 		logger.info('connected');
 		missingConfigLogged = false;
 		updateStatusBar();
@@ -407,6 +417,16 @@ const connectSocket = (
 	socket.on('connect_error', (error) => {
 		logger.error(`connect_error: ${error.message}`);
 		updateStatusBar();
+
+		if (!socket.active) {
+			// Socket.IO gave up reconnecting (middleware rejection, not a transient error).
+			clearSlowRetry();
+			slowRetryTimer = setTimeout(() => {
+				slowRetryTimer = undefined;
+				refreshConnection(logger);
+			}, 5 * 60 * 1000);
+			logger.info('scheduled slow retry in 5 minutes');
+		}
 	});
 
 	socket.on(protocol.EVENT_SERVER_HELLO, (payload: ServerHelloPayload) => {
