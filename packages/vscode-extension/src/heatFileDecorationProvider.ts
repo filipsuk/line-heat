@@ -1,3 +1,4 @@
+import * as path from 'path';
 import * as vscode from 'vscode';
 
 import { computeHeatIntensity, formatRelativeTime } from './format';
@@ -14,10 +15,24 @@ type HeatFileDecorationDeps = {
 
 const HEAT_THRESHOLD = 0.75;
 
+/** Collect ancestor directory paths up to (but not including) the filesystem root. */
+const getAncestorPaths = (fsPath: string): string[] => {
+	const ancestors: string[] = [];
+	let dir = path.dirname(fsPath);
+	while (dir !== path.dirname(dir)) {
+		ancestors.push(dir);
+		dir = path.dirname(dir);
+	}
+	return ancestors;
+};
+
 export class HeatFileDecorationProvider implements vscode.FileDecorationProvider {
 	private readonly onDidChangeEmitter = new vscode.EventEmitter<vscode.Uri | vscode.Uri[] | undefined>();
 	public readonly onDidChangeFileDecorations = this.onDidChangeEmitter.event;
 	private readonly deps: HeatFileDecorationDeps;
+	// Tracks lastEditAt per file fsPath from the previous refresh, so we only
+	// fire change events for URIs whose decoration actually changed.
+	private lastHeatByFile = new Map<string, number>();
 
 	public constructor(deps?: HeatFileDecorationDeps) {
 		if (!deps) {
@@ -27,7 +42,62 @@ export class HeatFileDecorationProvider implements vscode.FileDecorationProvider
 	}
 
 	refresh() {
-		this.onDidChangeEmitter.fire(undefined);
+		const repoHeatMap = this.deps.getRepoHeatMap();
+		const hashIndex = this.deps.getHashIndex();
+		const settings = this.deps.getSettings();
+		const decayHours = settings?.heatDecayHours ?? 24;
+		const decayMs = decayHours > 0 ? decayHours * 60 * 60 * 1000 : 0;
+		const now = Date.now();
+
+		// Build the current heat snapshot: fsPath → lastEditAt for hot files only
+		const currentHeat = new Map<string, number>();
+		if (repoHeatMap && hashIndex && settings?.explorerDecorations && decayMs > 0) {
+			for (const [hashedRepoId, fileMap] of hashIndex.entries()) {
+				const repoHeat = repoHeatMap.get(hashedRepoId);
+				if (!repoHeat) {
+					continue;
+				}
+				for (const [hashedFilePath, indexedUri] of fileMap.entries()) {
+					const lastEditAt = repoHeat.get(hashedFilePath);
+					if (lastEditAt === undefined) {
+						continue;
+					}
+					const intensity = computeHeatIntensity(now, lastEditAt, decayMs);
+					if (intensity >= HEAT_THRESHOLD) {
+						currentHeat.set(indexedUri.fsPath, lastEditAt);
+					}
+				}
+			}
+		}
+
+		// Diff against previous state to find changed file paths
+		const changedPaths = new Set<string>();
+		for (const [fsPath, lastEditAt] of currentHeat) {
+			if (this.lastHeatByFile.get(fsPath) !== lastEditAt) {
+				changedPaths.add(fsPath);
+			}
+		}
+		for (const [fsPath] of this.lastHeatByFile) {
+			if (!currentHeat.has(fsPath)) {
+				changedPaths.add(fsPath);
+			}
+		}
+
+		this.lastHeatByFile = currentHeat;
+
+		if (changedPaths.size === 0) {
+			return;
+		}
+
+		// Also invalidate ancestor folders of changed files
+		const changedFsPaths = new Set<string>(changedPaths);
+		for (const fsPath of changedPaths) {
+			for (const ancestor of getAncestorPaths(fsPath)) {
+				changedFsPaths.add(ancestor);
+			}
+		}
+
+		this.onDidChangeEmitter.fire([...changedFsPaths].map((p) => vscode.Uri.file(p)));
 	}
 
 	provideFileDecoration(uri: vscode.Uri): vscode.FileDecoration | undefined {
@@ -88,12 +158,10 @@ export class HeatFileDecorationProvider implements vscode.FileDecorationProvider
 				}
 				const intensity = computeHeatIntensity(now, lastEditAt, decayMs);
 				if (intensity >= HEAT_THRESHOLD) {
-					const decoration = new vscode.FileDecoration(
+					return new vscode.FileDecoration(
 						'\u{1F525}',
 						`Teammates edited ${formatRelativeTime(now, lastEditAt)}`,
 					);
-					decoration.propagate = true;
-					return decoration;
 				}
 				return undefined;
 			}
@@ -102,14 +170,44 @@ export class HeatFileDecorationProvider implements vscode.FileDecorationProvider
 	}
 
 	private resolveFolderDecoration(
-		_uri: vscode.Uri,
-		_repoHeatMap: Map<string, Map<string, number>>,
-		_hashIndex: Map<string, Map<string, vscode.Uri>>,
-		_now: number,
-		_decayMs: number,
+		uri: vscode.Uri,
+		repoHeatMap: Map<string, Map<string, number>>,
+		hashIndex: Map<string, Map<string, vscode.Uri>>,
+		now: number,
+		decayMs: number,
 	): vscode.FileDecoration | undefined {
-		// Folder decoration is handled by propagate: true on file decorations
-		// This is a separate code path for future customization (e.g. aggregate folder heat)
-		return undefined;
+		const folderPath = uri.fsPath + '/';
+		let mostRecentEditAt: number | undefined;
+
+		for (const [hashedRepoId, fileMap] of hashIndex.entries()) {
+			const repoHeat = repoHeatMap.get(hashedRepoId);
+			if (!repoHeat) {
+				continue;
+			}
+			for (const [hashedFilePath, indexedUri] of fileMap.entries()) {
+				if (!indexedUri.fsPath.startsWith(folderPath)) {
+					continue;
+				}
+				const lastEditAt = repoHeat.get(hashedFilePath);
+				if (lastEditAt === undefined) {
+					continue;
+				}
+				const intensity = computeHeatIntensity(now, lastEditAt, decayMs);
+				if (intensity >= HEAT_THRESHOLD) {
+					if (mostRecentEditAt === undefined || lastEditAt > mostRecentEditAt) {
+						mostRecentEditAt = lastEditAt;
+					}
+				}
+			}
+		}
+
+		if (mostRecentEditAt === undefined) {
+			return undefined;
+		}
+
+		return new vscode.FileDecoration(
+			'\u{00B7}',
+			`Teammates edited ${formatRelativeTime(now, mostRecentEditAt)}`,
+		);
 	}
 }

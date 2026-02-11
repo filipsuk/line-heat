@@ -48,7 +48,7 @@ suite('Explorer Heat Decorations', function () {
 		assert.ok(decoration, 'Expected a decoration for hot file');
 		assert.strictEqual(decoration.badge, '\u{1F525}', 'Expected fire emoji badge');
 		assert.strictEqual(decoration.tooltip, 'Teammates edited 5m ago');
-		assert.strictEqual(decoration.propagate, true, 'Expected propagate=true for folder rollup');
+		assert.strictEqual(decoration.propagate, undefined, 'Expected no propagation (folders get their own decoration)');
 	});
 
 	test('no decoration on file with heat below 0.75', () => {
@@ -95,6 +95,62 @@ suite('Explorer Heat Decorations', function () {
 
 		const decoration = provider.provideFileDecoration(fileUri);
 		assert.strictEqual(decoration, undefined, 'Expected no decoration when server returns empty');
+	});
+
+	test('shows folder decoration with most recent hot file time', () => {
+		const hashedRepoId = sha256Hex('test-repo');
+		const hashedFileA = sha256Hex('src/a.ts');
+		const hashedFileB = sha256Hex('src/b.ts');
+		const fileUriA = vscode.Uri.file('/workspace/src/a.ts');
+		const fileUriB = vscode.Uri.file('/workspace/src/b.ts');
+		const folderUri = vscode.Uri.file('/workspace/src');
+
+		const repoHeatMap = new Map<string, Map<string, number>>();
+		repoHeatMap.set(hashedRepoId, new Map([
+			[hashedFileA, Date.now() - 2 * 3600_000], // 2h ago
+			[hashedFileB, Date.now() - 10 * 60_000],  // 10m ago (most recent)
+		]));
+
+		const hashIndex = new Map<string, Map<string, vscode.Uri>>();
+		hashIndex.set(hashedRepoId, new Map([
+			[hashedFileA, fileUriA],
+			[hashedFileB, fileUriB],
+		]));
+
+		const provider = new HeatFileDecorationProvider({
+			getLogger: () => undefined,
+			getSettings: () => createMockSettings(),
+			getRepoHeatMap: () => repoHeatMap,
+			getHashIndex: () => hashIndex,
+		});
+
+		const decoration = provider.provideFileDecoration(folderUri);
+		assert.ok(decoration, 'Expected a decoration for folder with hot files');
+		assert.strictEqual(decoration.badge, '\u{00B7}');
+		assert.strictEqual(decoration.tooltip, 'Teammates edited 10m ago');
+	});
+
+	test('no folder decoration when no hot files underneath', () => {
+		const hashedRepoId = sha256Hex('test-repo');
+		const hashedFilePath = sha256Hex('other/cold.ts');
+		const fileUri = vscode.Uri.file('/workspace/other/cold.ts');
+		const folderUri = vscode.Uri.file('/workspace/src');
+
+		const repoHeatMap = new Map<string, Map<string, number>>();
+		repoHeatMap.set(hashedRepoId, new Map([[hashedFilePath, Date.now() - 5 * 60_000]]));
+
+		const hashIndex = new Map<string, Map<string, vscode.Uri>>();
+		hashIndex.set(hashedRepoId, new Map([[hashedFilePath, fileUri]]));
+
+		const provider = new HeatFileDecorationProvider({
+			getLogger: () => undefined,
+			getSettings: () => createMockSettings(),
+			getRepoHeatMap: () => repoHeatMap,
+			getHashIndex: () => hashIndex,
+		});
+
+		const decoration = provider.provideFileDecoration(folderUri);
+		assert.strictEqual(decoration, undefined, 'Expected no decoration for folder without hot files');
 	});
 
 	test('no decoration when explorerDecorations setting is false', () => {
