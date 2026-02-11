@@ -13,9 +13,10 @@ RUN apt-get update \
 
 # Install deps (workspace-aware). Copy package manifests first for layer caching.
 COPY package.json ./
+COPY package-lock.json ./
 COPY packages/protocol/package.json packages/protocol/package.json
 COPY packages/server/package.json packages/server/package.json
-RUN npm install --no-package-lock --no-audit --no-fund
+RUN npm ci --no-audit --no-fund
 
 # Copy sources and build.
 COPY packages/protocol packages/protocol
