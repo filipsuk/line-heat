@@ -13,7 +13,7 @@ const fileRepoCache = new Map<string, Promise<RepoContext | undefined>>();
 const execFileWithTimeout = async (
 	command: string,
 	args: string[],
-	options: { cwd?: string; timeoutMs?: number } = {},
+	options: { cwd?: string; timeoutMs?: number; maxBuffer?: number } = {},
 ) =>
 	new Promise<string>((resolve, reject) => {
 		execFile(
@@ -22,7 +22,7 @@ const execFileWithTimeout = async (
 			{
 				cwd: options.cwd,
 				timeout: options.timeoutMs ?? gitTimeoutMs,
-				maxBuffer: 1024 * 1024,
+				maxBuffer: options.maxBuffer ?? 1024 * 1024,
 			},
 			(error, stdout) => {
 				if (error) {
@@ -173,6 +173,30 @@ const resolveRepoId = (gitRoot: string, logger: LineHeatLogger) => {
 		.catch(() => undefined);
 	repoIdCache.set(gitRoot, promise);
 	return promise;
+};
+
+export const listTrackedFiles = async (directory: string, logger: LineHeatLogger): Promise<string[]> => {
+	try {
+		const rootStdout = await execFileWithTimeout('git', ['rev-parse', '--show-toplevel'], {
+			cwd: directory,
+		});
+		const root = rootStdout.trim();
+		if (!root) {
+			return [];
+		}
+		const stdout = await execFileWithTimeout('git', ['ls-files', '-z'], {
+			cwd: root,
+			timeoutMs: 10_000,
+			maxBuffer: 10 * 1024 * 1024,
+		});
+		return stdout
+			.split('\0')
+			.filter(Boolean)
+			.map((rel) => path.resolve(root, rel));
+	} catch (error) {
+		logger.debug(`git ls-files failed in ${directory}: ${(error as Error).message}`);
+		return [];
+	}
 };
 
 export const resolveRepoContext = (filePath: string, logger: LineHeatLogger) => {
