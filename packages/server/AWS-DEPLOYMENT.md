@@ -187,6 +187,30 @@ Let's Encrypt certificates expire every 90 days. Certbot automatically sets up a
 sudo certbot renew --dry-run
 ```
 
+### Upgrading running server
+
+1. SSH into the EC2 instance
+2. Pull latest code and rebuild Docker image
+```bash
+cd line-heat
+git pull origin main
+docker build -t lineheat-server -f packages/server/Dockerfile .
+```
+3. Restart the container (do not forget to provide correct environment variables)
+```bash
+docker stop lineheat-server
+docker rm lineheat-server
+docker run -d \
+  --name lineheat-server \
+  --restart unless-stopped \
+  -e LINEHEAT_TOKEN=XXXXX \
+  -e LINEHEAT_RETENTION_DAYS=7 \
+  -e LINEHEAT_DB_PATH=/data/lineheat.sqlite \
+  -v ./data:/data \
+  -p 127.0.0.1:3000:8787 \
+  lineheat-server
+```
+
 ---
 
 ## Configuration
