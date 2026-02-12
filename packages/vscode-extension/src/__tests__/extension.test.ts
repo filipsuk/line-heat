@@ -9,6 +9,7 @@ import { startMockLineHeatServer } from './support/mockLineHeatServer';
 
 import {
 	cdpCaptureScreenshotPng,
+	createTestWorkspace,
 	editAndWaitForLog,
 	runGit,
 	sleep,
@@ -455,7 +456,7 @@ suite('Line Heat Extension', function () {
 	});
 
 
-		test('does not show own presence in CodeLens', async () => {
+	test('logs presence:set with a meaningful functionId (not %2F) for exported const arrow', async () => {
 		const token = 'devtoken';
 		const editorConfig = vscode.workspace.getConfiguration('editor');
 		const config = vscode.workspace.getConfiguration('lineheat');
@@ -464,6 +465,108 @@ suite('Line Heat Extension', function () {
 		await config.update('token', '', vscode.ConfigurationTarget.Global);
 		await config.update('displayName', 'Me', vscode.ConfigurationTarget.Global);
 		await config.update('emoji', '😎', vscode.ConfigurationTarget.Global);
+		await config.update('logLevel', 'debug', vscode.ConfigurationTarget.Global);
+
+		const tempDir = await createTestWorkspace('line-heat-presence-functionid');
+		await runGit(['init'], tempDir);
+		await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
+
+		const filePath = path.join(tempDir, 'someFunc.ts');
+		const fileUri = vscode.Uri.file(filePath);
+		await fs.writeFile(
+			filePath,
+			[
+				'export const someFunc = (intensity: number) => {',
+				"\tif (intensity >= 0.75) {",
+				"\t\treturn '🔥';",
+				"\t}",
+				"\tif (intensity >= 0.5) {",
+				"\t\treturn '🟠';",
+				"\t}",
+				"\tif (intensity >= 0.25) {",
+				"\t\treturn '🟡';",
+				"\t}",
+				"\treturn '🔵';",
+				'};',
+			].join('\n'),
+			'utf8',
+		);
+		await runGit(['add', '.'], tempDir);
+
+		const mockServer = await startMockLineHeatServer({ token, retentionDays: 7 });
+		await config.update('serverUrl', mockServer.serverUrl, vscode.ConfigurationTarget.Global);
+		await config.update('token', token, vscode.ConfigurationTarget.Global);
+
+		const extension = vscode.extensions.getExtension<ExtensionApi>('filipsuk.lineheat-vscode');
+		assert.ok(extension, 'Extension not found');
+		const api = await extension.activate();
+		assert.ok(api?.logger, 'Extension did not return logger');
+		api.logger.messages.splice(0, api.logger.messages.length);
+
+		try {
+			const doc = await vscode.workspace.openTextDocument(fileUri);
+			const editor = await vscode.window.showTextDocument(doc, { preview: false });
+			await sleep(100);
+			await waitFor(
+				() => api.logger.messages.some((m) => m.includes('hash-index:built')),
+				8000,
+				`hash-index:built not found. Last 20: ${api.logger.messages.slice(-20).join('\n')}`,
+			);
+				const expectedFilePath = path.relative(tempDir, filePath).split(path.sep).join('/');
+			const expectedFilePathHash = sha256Hex(expectedFilePath);
+			await mockServer.waitForRoomJoin({ predicate: (room) => room.filePath === expectedFilePathHash });
+
+			editor.selection = new vscode.Selection(new vscode.Position(5, 1), new vscode.Position(5, 1));
+			await waitFor(
+				() =>
+					api.logger.messages.some(
+						(m) => m.includes('lineheat: presence:desired:set') && m.includes('functionId=someFunc'),
+					),
+				8000,
+				`presence:desired:set not observed. Last 50 messages:\n${api.logger.messages
+					.slice(-50)
+					.join('\n')}`,
+			);
+			assert.ok(
+				!api.logger.messages.some((m) => m.includes('lineheat: presence:set') && m.includes('functionId=%2F')),
+				`Unexpected %2F functionId in presence:set. Last 30 messages:\n${api.logger.messages
+					.slice(-30)
+					.join('\n')}`,
+			);
+		} finally {
+			await fs.rm(tempDir, { recursive: true, force: true });
+			await mockServer.close();
+			await config.update('serverUrl', '', vscode.ConfigurationTarget.Global);
+			await config.update('token', '', vscode.ConfigurationTarget.Global);
+			await config.update('displayName', '', vscode.ConfigurationTarget.Global);
+			await config.update('emoji', '', vscode.ConfigurationTarget.Global);
+			await config.update('logLevel', undefined, vscode.ConfigurationTarget.Global);
+			await editorConfig.update('codeLens', undefined, vscode.ConfigurationTarget.Global);
+		}
+	});
+
+	test('does not show own presence in CodeLens', async () => {
+		const token = 'devtoken';
+		const editorConfig = vscode.workspace.getConfiguration('editor');
+		const config = vscode.workspace.getConfiguration('lineheat');
+		await editorConfig.update('codeLens', true, vscode.ConfigurationTarget.Global);
+		await config.update('serverUrl', '', vscode.ConfigurationTarget.Global);
+		await config.update('token', '', vscode.ConfigurationTarget.Global);
+		await config.update('displayName', 'Me', vscode.ConfigurationTarget.Global);
+		await config.update('emoji', '😎', vscode.ConfigurationTarget.Global);
+
+		const tempDir = await createTestWorkspace('line-heat-own-presence');
+		await runGit(['init'], tempDir);
+		await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
+
+		const filePath = path.join(tempDir, 'presence.ts');
+		const fileUri = vscode.Uri.file(filePath);
+		await fs.writeFile(
+			filePath,
+			'function testFunction() {\n  const value = 42;\n  return value;\n}',
+			'utf8',
+		);
+		await runGit(['add', '.'], tempDir);
 
 		const mockServer = await startMockLineHeatServer({
 			token,
@@ -490,111 +593,15 @@ suite('Line Heat Extension', function () {
 			},
 		});
 
-		test('logs presence:set with a meaningful functionId (not %2F) for exported const arrow', async () => {
-			const token = 'devtoken';
-			const editorConfig = vscode.workspace.getConfiguration('editor');
-			const config = vscode.workspace.getConfiguration('lineheat');
-			await editorConfig.update('codeLens', true, vscode.ConfigurationTarget.Global);
-			await config.update('serverUrl', '', vscode.ConfigurationTarget.Global);
-			await config.update('token', '', vscode.ConfigurationTarget.Global);
-			await config.update('displayName', 'Me', vscode.ConfigurationTarget.Global);
-			await config.update('emoji', '😎', vscode.ConfigurationTarget.Global);
-			await config.update('logLevel', 'debug', vscode.ConfigurationTarget.Global);
-
-			const mockServer = await startMockLineHeatServer({ token, retentionDays: 7 });
-			await config.update('serverUrl', mockServer.serverUrl, vscode.ConfigurationTarget.Global);
-			await config.update('token', token, vscode.ConfigurationTarget.Global);
-
-			const extension = vscode.extensions.getExtension<ExtensionApi>('filipsuk.lineheat-vscode');
-			assert.ok(extension, 'Extension not found');
-			const api = await extension.activate();
-			assert.ok(api?.logger, 'Extension did not return logger');
-			api.logger.messages.splice(0, api.logger.messages.length);
-
-			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'line-heat-presence-functionid-'));
-			try {
-				await runGit(['init'], tempDir);
-				await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
-
-				const filePath = path.join(tempDir, 'someFunc.ts');
-				const fileUri = vscode.Uri.file(filePath);
-				await fs.writeFile(
-					filePath,
-					[
-						'export const someFunc = (intensity: number) => {',
-						"\tif (intensity >= 0.75) {",
-						"\t\treturn '🔥';",
-						"\t}",
-						"\tif (intensity >= 0.5) {",
-						"\t\treturn '🟠';",
-						"\t}",
-						"\tif (intensity >= 0.25) {",
-						"\t\treturn '🟡';",
-						"\t}",
-						"\treturn '🔵';",
-						'};',
-					].join('\n'),
-					'utf8',
-				);
-
-				const doc = await vscode.workspace.openTextDocument(fileUri);
-				const editor = await vscode.window.showTextDocument(doc, { preview: false });
-				await sleep(100);
-				api.logger.messages.splice(0, api.logger.messages.length);
-
-				const expectedFilePath = path.relative(tempDir, filePath).split(path.sep).join('/');
-				const expectedFilePathHash = sha256Hex(expectedFilePath);
-				await mockServer.waitForRoomJoin({ predicate: (room) => room.filePath === expectedFilePathHash });
-
-				editor.selection = new vscode.Selection(new vscode.Position(5, 1), new vscode.Position(5, 1));
-				await waitFor(
-					() =>
-						api.logger.messages.some(
-							(m) => m.includes('lineheat: presence:desired:set') && m.includes('functionId=someFunc'),
-						),
-					8000,
-					`presence:desired:set not observed. Last 30 messages:\n${api.logger.messages
-						.slice(-30)
-						.join('\n')}`,
-				);
-				assert.ok(
-					!api.logger.messages.some((m) => m.includes('lineheat: presence:set') && m.includes('functionId=%2F')),
-					`Unexpected %2F functionId in presence:set. Last 30 messages:\n${api.logger.messages
-						.slice(-30)
-						.join('\n')}`,
-				);
-			} finally {
-				await fs.rm(tempDir, { recursive: true, force: true });
-				await mockServer.close();
-				await config.update('serverUrl', '', vscode.ConfigurationTarget.Global);
-				await config.update('token', '', vscode.ConfigurationTarget.Global);
-				await config.update('displayName', '', vscode.ConfigurationTarget.Global);
-				await config.update('emoji', '', vscode.ConfigurationTarget.Global);
-				await config.update('logLevel', undefined, vscode.ConfigurationTarget.Global);
-				await editorConfig.update('codeLens', undefined, vscode.ConfigurationTarget.Global);
-			}
-		});
-
 		await config.update('serverUrl', mockServer.serverUrl, vscode.ConfigurationTarget.Global);
 		await config.update('token', token, vscode.ConfigurationTarget.Global);
 
 		const extension = vscode.extensions.getExtension<ExtensionApi>('filipsuk.lineheat-vscode');
 		assert.ok(extension, 'Extension not found');
-		await extension.activate();
+		const api = await extension.activate();
+		assert.ok(api?.logger, 'Extension did not return logger');
 
-		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'line-heat-own-presence-'));
 		try {
-			await runGit(['init'], tempDir);
-			await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
-
-			const filePath = path.join(tempDir, 'presence.ts');
-			const fileUri = vscode.Uri.file(filePath);
-			await fs.writeFile(
-				filePath,
-				'function testFunction() {\n  const value = 42;\n  return value;\n}',
-				'utf8',
-			);
-
 			const doc = await vscode.workspace.openTextDocument(fileUri);
 			await vscode.window.showTextDocument(doc, { preview: false });
 
@@ -603,6 +610,11 @@ suite('Line Heat Extension', function () {
 			await mockServer.waitForRoomJoin({
 				predicate: (room) => room.filePath === expectedFilePathHash,
 			});
+			await waitFor(
+				() => api.logger.messages.some((m) => m.includes('hash-index:built')),
+				8000,
+				`hash-index:built not found. Last 20: ${api.logger.messages.slice(-20).join('\n')}`,
+			);
 
 			await waitForAsync(async () => {
 				const result = await vscode.commands.executeCommand('vscode.executeCodeLensProvider', fileUri);
@@ -623,7 +635,7 @@ suite('Line Heat Extension', function () {
 			await config.update('emoji', '', vscode.ConfigurationTarget.Global);
 			await editorConfig.update('codeLens', undefined, vscode.ConfigurationTarget.Global);
 		}
-		});
+	});
 
 		test('does not show own edits in CodeLens', async () => {
 			const token = 'devtoken';
@@ -634,6 +646,19 @@ suite('Line Heat Extension', function () {
 			await config.update('token', '', vscode.ConfigurationTarget.Global);
 			await config.update('displayName', 'Me', vscode.ConfigurationTarget.Global);
 			await config.update('emoji', '😎', vscode.ConfigurationTarget.Global);
+
+			const tempDir = await createTestWorkspace('line-heat-own-edits');
+			await runGit(['init'], tempDir);
+			await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
+
+			const filePath = path.join(tempDir, 'edits.ts');
+			const fileUri = vscode.Uri.file(filePath);
+			await fs.writeFile(
+				filePath,
+				'function testFunction() {\n  const value = 42;\n  return value;\n}',
+				'utf8',
+			);
+			await runGit(['add', '.'], tempDir);
 
 			const mockServer = await startMockLineHeatServer({
 				token,
@@ -667,21 +692,10 @@ suite('Line Heat Extension', function () {
 
 			const extension = vscode.extensions.getExtension<ExtensionApi>('filipsuk.lineheat-vscode');
 			assert.ok(extension, 'Extension not found');
-			await extension.activate();
+			const api = await extension.activate();
+			assert.ok(api?.logger, 'Extension did not return logger');
 
-			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'line-heat-own-edits-'));
 			try {
-				await runGit(['init'], tempDir);
-				await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
-
-				const filePath = path.join(tempDir, 'edits.ts');
-				const fileUri = vscode.Uri.file(filePath);
-				await fs.writeFile(
-					filePath,
-					'function testFunction() {\n  const value = 42;\n  return value;\n}',
-					'utf8',
-				);
-
 				const doc = await vscode.workspace.openTextDocument(fileUri);
 				await vscode.window.showTextDocument(doc, { preview: false });
 
@@ -690,6 +704,11 @@ suite('Line Heat Extension', function () {
 				await mockServer.waitForRoomJoin({
 					predicate: (room) => room.filePath === expectedFilePathHash,
 				});
+				await waitFor(
+					() => api.logger.messages.some((m) => m.includes('hash-index:built')),
+					8000,
+					`hash-index:built not found. Last 20: ${api.logger.messages.slice(-20).join('\n')}`,
+				);
 
 				await waitForAsync(async () => {
 					const result = await vscode.commands.executeCommand('vscode.executeCodeLensProvider', fileUri);
@@ -722,6 +741,19 @@ suite('Line Heat Extension', function () {
 			await config.update('displayName', 'Me', vscode.ConfigurationTarget.Global);
 			await config.update('emoji', '😎', vscode.ConfigurationTarget.Global);
 
+			const tempDir = await createTestWorkspace('line-heat-own-edits-only-self');
+			await runGit(['init'], tempDir);
+			await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
+
+			const filePath = path.join(tempDir, 'edits-only-self.ts');
+			const fileUri = vscode.Uri.file(filePath);
+			await fs.writeFile(
+				filePath,
+				'function testFunction() {\n  const value = 42;\n  return value;\n}',
+				'utf8',
+			);
+			await runGit(['add', '.'], tempDir);
+
 			const mockServer = await startMockLineHeatServer({
 				token,
 				retentionDays: 7,
@@ -753,21 +785,10 @@ suite('Line Heat Extension', function () {
 
 			const extension = vscode.extensions.getExtension<ExtensionApi>('filipsuk.lineheat-vscode');
 			assert.ok(extension, 'Extension not found');
-			await extension.activate();
+			const api = await extension.activate();
+			assert.ok(api?.logger, 'Extension did not return logger');
 
-			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'line-heat-own-edits-only-self-'));
 			try {
-				await runGit(['init'], tempDir);
-				await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
-
-				const filePath = path.join(tempDir, 'edits-only-self.ts');
-				const fileUri = vscode.Uri.file(filePath);
-				await fs.writeFile(
-					filePath,
-					'function testFunction() {\n  const value = 42;\n  return value;\n}',
-					'utf8',
-				);
-
 				const doc = await vscode.workspace.openTextDocument(fileUri);
 				await vscode.window.showTextDocument(doc, { preview: false });
 
@@ -776,6 +797,11 @@ suite('Line Heat Extension', function () {
 				await mockServer.waitForRoomJoin({
 					predicate: (room) => room.filePath === expectedFilePathHash,
 				});
+				await waitFor(
+					() => api.logger.messages.some((m) => m.includes('hash-index:built')),
+					8000,
+					`hash-index:built not found. Last 20: ${api.logger.messages.slice(-20).join('\n')}`,
+				);
 
 				await waitForAsync(async () => {
 					const result = await vscode.commands.executeCommand('vscode.executeCodeLensProvider', fileUri);
@@ -801,8 +827,30 @@ suite('Line Heat Extension', function () {
 
 		test('joins expected room for opened file', async () => {
 		const token = 'devtoken';
-		const mockServer = await startMockLineHeatServer({ token, retentionDays: 7 });
 		const config = vscode.workspace.getConfiguration('lineheat');
+
+		const tempDir = await createTestWorkspace('line-heat-mock-server');
+		await runGit(['init'], tempDir);
+		await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
+
+		const filePath = path.join(tempDir, 'heat.ts');
+		const fileUri = vscode.Uri.file(filePath);
+		await fs.writeFile(
+			filePath,
+			[
+				'function alpha() {',
+				'  return 1;',
+				'}',
+				'',
+				'function beta() {',
+				'  return 2;',
+				'}',
+			].join('\n'),
+			'utf8',
+		);
+		await runGit(['add', '.'], tempDir);
+
+		const mockServer = await startMockLineHeatServer({ token, retentionDays: 7 });
 
 		await config.update('serverUrl', mockServer.serverUrl, vscode.ConfigurationTarget.Global);
 		await config.update('token', token, vscode.ConfigurationTarget.Global);
@@ -810,29 +858,10 @@ suite('Line Heat Extension', function () {
 		const extension = vscode.extensions.getExtension<ExtensionApi>('filipsuk.lineheat-vscode');
 		assert.ok(extension, 'Extension not found');
 
-		await extension.activate();
+		const api = await extension.activate();
+		assert.ok(api?.logger, 'Extension did not return logger');
 
-		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'line-heat-mock-server-'));
 		try {
-			await runGit(['init'], tempDir);
-			await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
-
-			const filePath = path.join(tempDir, 'heat.ts');
-			const fileUri = vscode.Uri.file(filePath);
-			await fs.writeFile(
-				filePath,
-				[
-					'function alpha() {',
-					'  return 1;',
-					'}',
-					'',
-					'function beta() {',
-					'  return 2;',
-					'}',
-				].join('\n'),
-				'utf8',
-			);
-
 			const doc = await vscode.workspace.openTextDocument(fileUri);
 			await vscode.window.showTextDocument(doc, { preview: false });
 
@@ -842,6 +871,11 @@ suite('Line Heat Extension', function () {
 			const joined = await mockServer.waitForRoomJoin({
 				predicate: (room) => room.filePath === expectedFilePathHash,
 			});
+			await waitFor(
+				() => api.logger.messages.some((m) => m.includes('hash-index:built')),
+				8000,
+				`hash-index:built not found. Last 20: ${api.logger.messages.slice(-20).join('\n')}`,
+			);
 			assert.strictEqual(joined.hashVersion, HASH_VERSION);
 			assert.strictEqual(joined.filePath, expectedFilePathHash);
 			assert.strictEqual(joined.repoId, expectedRepoIdHash);
@@ -867,6 +901,23 @@ suite('Line Heat Extension', function () {
 				const aliceEmoji = '🦄';
 				const aliceName = 'Alice';
 
+				const tempDir = await createTestWorkspace('line-heat-presence-delta');
+				await runGit(['init'], tempDir);
+				await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
+
+				const filePath = path.join(tempDir, 'presence.ts');
+				const fileUri = vscode.Uri.file(filePath);
+				await fs.writeFile(
+					filePath,
+					[
+						'function alpha() {',
+						'  return 1;',
+						'}',
+					].join('\n'),
+					'utf8',
+				);
+				await runGit(['add', '.'], tempDir);
+
 				const mockServer = await startMockLineHeatServer({
 					token,
 					retentionDays: 7,
@@ -884,25 +935,10 @@ suite('Line Heat Extension', function () {
 
 				const extension = vscode.extensions.getExtension<ExtensionApi>('filipsuk.lineheat-vscode');
 				assert.ok(extension, 'Extension not found');
-				await extension.activate();
+				const api = await extension.activate();
+				assert.ok(api?.logger, 'Extension did not return logger');
 
-				const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'line-heat-presence-delta-'));
 				try {
-					await runGit(['init'], tempDir);
-					await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
-
-					const filePath = path.join(tempDir, 'presence.ts');
-					const fileUri = vscode.Uri.file(filePath);
-					await fs.writeFile(
-						filePath,
-						[
-							'function alpha() {',
-							'  return 1;',
-							'}',
-						].join('\n'),
-						'utf8',
-					);
-
 					const doc = await vscode.workspace.openTextDocument(fileUri);
 					await vscode.window.showTextDocument(doc, { preview: false });
 
@@ -911,6 +947,11 @@ suite('Line Heat Extension', function () {
 					const joinedRoom = await mockServer.waitForRoomJoin({
 						predicate: (room) => room.filePath === expectedFilePathHash,
 					});
+					await waitFor(
+						() => api.logger.messages.some((m) => m.includes('hash-index:built')),
+						8000,
+						`hash-index:built not found. Last 20: ${api.logger.messages.slice(-20).join('\n')}`,
+					);
 
 					const now = Date.now();
 					mockServer.emitFileDelta({
@@ -969,6 +1010,31 @@ suite('Line Heat Extension', function () {
 			const bobName = 'Bob';
 			const carolName = 'Carol';
 
+			const tempDir = await createTestWorkspace('line-heat-codelens');
+			await runGit(['init'], tempDir);
+			await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
+
+			const filePath = path.join(tempDir, 'heat.ts');
+			const fileUri = vscode.Uri.file(filePath);
+			await fs.writeFile(
+				filePath,
+				[
+					'function alpha() {',
+					'  return 1;',
+					'}',
+					'',
+					'function beta() {',
+					'  return 2;',
+					'}',
+					'',
+					'function gamma() {',
+					'  return 3;',
+					'}',
+				].join('\n'),
+				'utf8',
+			);
+			await runGit(['add', '.'], tempDir);
+
 			const mockServer = await startMockLineHeatServer({
 				token,
 				retentionDays: 7,
@@ -1018,33 +1084,10 @@ suite('Line Heat Extension', function () {
 
 			const extension = vscode.extensions.getExtension<ExtensionApi>('filipsuk.lineheat-vscode');
 			assert.ok(extension, 'Extension not found');
-			await extension.activate();
+			const api = await extension.activate();
+			assert.ok(api?.logger, 'Extension did not return logger');
 
-			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'line-heat-codelens-'));
 			try {
-				await runGit(['init'], tempDir);
-				await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
-
-				const filePath = path.join(tempDir, 'heat.ts');
-				const fileUri = vscode.Uri.file(filePath);
-				await fs.writeFile(
-					filePath,
-					[
-						'function alpha() {',
-						'  return 1;',
-						'}',
-						'',
-						'function beta() {',
-						'  return 2;',
-						'}',
-						'',
-						'function gamma() {',
-						'  return 3;',
-						'}',
-					].join('\n'),
-					'utf8',
-				);
-
 				const doc = await vscode.workspace.openTextDocument(fileUri);
 				await vscode.window.showTextDocument(doc, { preview: false });
 
@@ -1053,6 +1096,11 @@ suite('Line Heat Extension', function () {
 				await mockServer.waitForRoomJoin({
 					predicate: (room) => room.filePath === expectedFilePathHash,
 				});
+				await waitFor(
+					() => api.logger.messages.some((m) => m.includes('hash-index:built')),
+					8000,
+					`hash-index:built not found. Last 20: ${api.logger.messages.slice(-20).join('\n')}`,
+				);
 
 				// Allow time for snapshot to be processed by the client
 				await sleep(200);
@@ -1103,6 +1151,19 @@ suite('Line Heat Extension', function () {
 			const selfName = 'Me';
 			const selfEmoji = '😎';
 
+			const tempDir = await createTestWorkspace('line-heat-non-self-age');
+			await runGit(['init'], tempDir);
+			await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
+
+			const filePath = path.join(tempDir, 'age.ts');
+			const fileUri = vscode.Uri.file(filePath);
+			await fs.writeFile(
+				filePath,
+				'function testFunction() {\n  const value = 42;\n  return value;\n}',
+				'utf8',
+			);
+			await runGit(['add', '.'], tempDir);
+
 			const mockServer = await startMockLineHeatServer({
 				token,
 				retentionDays: 7,
@@ -1140,21 +1201,10 @@ suite('Line Heat Extension', function () {
 
 			const extension = vscode.extensions.getExtension<ExtensionApi>('filipsuk.lineheat-vscode');
 			assert.ok(extension, 'Extension not found');
-			await extension.activate();
+			const api = await extension.activate();
+			assert.ok(api?.logger, 'Extension did not return logger');
 
-			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'line-heat-non-self-age-'));
 			try {
-				await runGit(['init'], tempDir);
-				await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
-
-				const filePath = path.join(tempDir, 'age.ts');
-				const fileUri = vscode.Uri.file(filePath);
-				await fs.writeFile(
-					filePath,
-					'function testFunction() {\n  const value = 42;\n  return value;\n}',
-					'utf8',
-				);
-
 				const doc = await vscode.workspace.openTextDocument(fileUri);
 				await vscode.window.showTextDocument(doc, { preview: false });
 
@@ -1163,6 +1213,11 @@ suite('Line Heat Extension', function () {
 				await mockServer.waitForRoomJoin({
 					predicate: (room) => room.filePath === expectedFilePathHash,
 				});
+				await waitFor(
+					() => api.logger.messages.some((m) => m.includes('hash-index:built')),
+					8000,
+					`hash-index:built not found. Last 20: ${api.logger.messages.slice(-20).join('\n')}`,
+				);
 
 				await waitForAsync(async () => {
 					const result = await vscode.commands.executeCommand('vscode.executeCodeLensProvider', fileUri);
@@ -1176,7 +1231,7 @@ suite('Line Heat Extension', function () {
 					if (!heatLens) {
 						return false;
 					}
-					
+
 					const title = heatLens.command?.title ?? '';
 					// Should show the non-self age (30 minutes ago), not self age (2 minutes ago)
 					// formatRelativeTime should return "30m" for 30 minutes ago
@@ -1207,6 +1262,23 @@ suite('Line Heat Extension', function () {
 			const aliceName = 'Alice';
 			const bobEmoji = '🙂';
 			const bobName = 'Bob';
+
+			const tempDir = await createTestWorkspace('line-heat-screenshot');
+			await runGit(['init'], tempDir);
+			await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
+
+			const filePath = path.join(tempDir, 'heat.ts');
+			const fileUri = vscode.Uri.file(filePath);
+			await fs.writeFile(
+				filePath,
+				[
+					'function alpha() {',
+					'  return 1;',
+					'}',
+				].join('\n'),
+				'utf8',
+			);
+			await runGit(['add', '.'], tempDir);
 
 			const mockServer = await startMockLineHeatServer({
 				token,
@@ -1248,25 +1320,10 @@ suite('Line Heat Extension', function () {
 
 			const extension = vscode.extensions.getExtension<ExtensionApi>('filipsuk.lineheat-vscode');
 			assert.ok(extension, 'Extension not found');
-			await extension.activate();
+			const api = await extension.activate();
+			assert.ok(api?.logger, 'Extension did not return logger');
 
-			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'line-heat-screenshot-'));
 			try {
-				await runGit(['init'], tempDir);
-				await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
-
-				const filePath = path.join(tempDir, 'heat.ts');
-				const fileUri = vscode.Uri.file(filePath);
-				await fs.writeFile(
-					filePath,
-					[
-						'function alpha() {',
-						'  return 1;',
-						'}',
-					].join('\n'),
-					'utf8',
-				);
-
 				const doc = await vscode.workspace.openTextDocument(fileUri);
 				await vscode.window.showTextDocument(doc, { preview: false });
 
@@ -1275,6 +1332,11 @@ suite('Line Heat Extension', function () {
 				await mockServer.waitForRoomJoin({
 					predicate: (room) => room.filePath === expectedFilePathHash,
 				});
+				await waitFor(
+					() => api.logger.messages.some((m) => m.includes('hash-index:built')),
+					8000,
+					`hash-index:built not found. Last 20: ${api.logger.messages.slice(-20).join('\n')}`,
+				);
 
 				await waitForAsync(async () => {
 					const result = await vscode.commands.executeCommand('vscode.executeCodeLensProvider', fileUri);

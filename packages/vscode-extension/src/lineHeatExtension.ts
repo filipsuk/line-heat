@@ -72,6 +72,7 @@ let heatFileDecorationProvider: HeatFileDecorationProvider | undefined;
 let repoHeatMap: Map<string, Map<string, number>> | undefined;
 let repoHeatTimer: ReturnType<typeof setInterval> | undefined;
 let hashIndex: Map<string, Map<string, vscode.Uri>> | undefined;
+let trackedFilePaths: Set<string> | undefined;
 let slowRetryTimer: ReturnType<typeof setTimeout> | undefined;
 let lastRepoHeatEmitAt = 0;
 
@@ -380,6 +381,7 @@ const disconnectSocket = () => {
 	activePresence = undefined;
 	roomStateByKey.clear();
 	roomKeyByHashedKey.clear();
+	trackedFilePaths = undefined;
 	retentionDays = getDefaultRetentionDays();
 };
 
@@ -600,6 +602,15 @@ const refreshActiveRepoState = async (
 		return undefined;
 	}
 
+	// Skip untracked files (gitignored, etc.)
+	if (trackedFilePaths && !trackedFilePaths.has(filePath)) {
+		logger.debug(`lineheat: file-untracked filePath=${filePath}`);
+		activeRepoState = { status: 'ready', context };
+		activeRoomContext = undefined;
+		updateStatusBar();
+		return undefined;
+	}
+
 	activeRepoState = { status: 'ready', context };
 	activeRoomContext = { repoId: context.repoId, filePath: context.filePath };
 	logger.debug(`active repo ${JSON.stringify({ repoId: context.repoId, filePath: context.filePath })}`);
@@ -714,15 +725,20 @@ const updateDesiredPresenceFromEditor = async (editor: vscode.TextEditor | undef
 	const position = editor.selection.active;
 	const functionInfo = resolveFunctionInfo(symbols, position, editor.document, logger);
 	if (logger) {
-		const suspicious =
-			!functionInfo ||
-			functionInfo.functionId === '%2F' ||
-			functionInfo.functionId.startsWith('%2F/') ||
-			functionInfo.functionId.endsWith('/%2F');
-		if (suspicious) {
+		if (!functionInfo) {
 			logger.debug(
-				`lineheat: symbols:suspicious uri=${editor.document.uri.fsPath} position=${position.line + 1}:${position.character} symbols=${symbols.length} top=[${formatSymbolsSummary(symbols)}]`,
+				`lineheat: presence skipped — cursor is outside a tracked symbol (function/class/namespace) uri=${editor.document.uri.fsPath} position=${position.line + 1}:${position.character} symbols=${symbols.length} top=[${formatSymbolsSummary(symbols)}]`,
 			);
+		} else {
+			const suspicious =
+				functionInfo.functionId === '%2F' ||
+				functionInfo.functionId.startsWith('%2F/') ||
+				functionInfo.functionId.endsWith('/%2F');
+			if (suspicious) {
+				logger.debug(
+					`lineheat: symbols:suspicious functionId=${functionInfo.functionId} uri=${editor.document.uri.fsPath} position=${position.line + 1}:${position.character} symbols=${symbols.length} top=[${formatSymbolsSummary(symbols)}]`,
+				);
+			}
 		}
 	}
 	if (!functionInfo) {
@@ -762,6 +778,10 @@ const updateOpenRoomsFromTabs = async (logger: LineHeatLogger) => {
 				}
 				// Skip disabled repositories
 				if (!isRepositoryEnabled(context.gitRoot, enabledPatterns)) {
+					return undefined;
+				}
+				// Skip untracked files (gitignored, etc.)
+				if (trackedFilePaths && !trackedFilePaths.has(uri.fsPath)) {
 					return undefined;
 				}
 				return { repoId: context.repoId, filePath: context.filePath } as RoomContext;
@@ -903,12 +923,15 @@ const buildHashIndex = async (logger: LineHeatLogger) => {
 	const start = Date.now();
 	const folders = vscode.workspace.workspaceFolders ?? [];
 	const files: vscode.Uri[] = [];
+	const nextTrackedPaths = new Set<string>();
 	for (const folder of folders) {
 		const tracked = await listTrackedFiles(folder.uri.fsPath, logger);
 		for (const absPath of tracked) {
 			files.push(vscode.Uri.file(absPath));
+			nextTrackedPaths.add(absPath);
 		}
 	}
+	trackedFilePaths = folders.length > 0 ? nextTrackedPaths : undefined;
 	const nextIndex = new Map<string, Map<string, vscode.Uri>>();
 	const results = await Promise.all(
 		files.map(async (uri) => {
@@ -1054,6 +1077,10 @@ export function activate(context: vscode.ExtensionContext) {
 			// Skip disabled repositories
 			const enabledPatterns = currentSettings?.enabledRepositories ?? [];
 			if (!isRepositoryEnabled(context.gitRoot, enabledPatterns)) {
+				return;
+			}
+			// Skip untracked files (gitignored, etc.)
+			if (trackedFilePaths && !trackedFilePaths.has(event.document.uri.fsPath)) {
 				return;
 			}
 			const symbols = await getDocumentSymbols(event.document, logger);

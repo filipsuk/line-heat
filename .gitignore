@@ -9,6 +9,7 @@ out/
 dist/
 .vscode-test/
 .vscode-test-artifacts/
+.test-workspaces/
 *.vsix
 
 .sisyphus/

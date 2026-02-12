@@ -1,5 +1,29 @@
 import { execFile } from 'child_process';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 import * as vscode from 'vscode';
+
+const testWorkspacesRoot = path.join(__dirname, '..', '..', '..', '.test-workspaces');
+
+export const createTestWorkspace = async (prefix: string): Promise<string> => {
+	await fs.mkdir(testWorkspacesRoot, { recursive: true });
+	return fs.mkdtemp(path.join(testWorkspacesRoot, `${prefix}-`));
+};
+
+export const addWorkspaceFolder = (dirPath: string) => {
+	const index = vscode.workspace.workspaceFolders?.length ?? 0;
+	vscode.workspace.updateWorkspaceFolders(index, 0, {
+		uri: vscode.Uri.file(dirPath),
+	});
+};
+
+export const removeWorkspaceFolder = (dirPath: string) => {
+	const folders = vscode.workspace.workspaceFolders ?? [];
+	const idx = folders.findIndex((f) => f.uri.fsPath === dirPath);
+	if (idx >= 0) {
+		vscode.workspace.updateWorkspaceFolders(idx, 1);
+	}
+};
 
 export type ExtensionApi = {
 	logger: {
