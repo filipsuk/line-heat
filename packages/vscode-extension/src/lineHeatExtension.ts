@@ -725,15 +725,20 @@ const updateDesiredPresenceFromEditor = async (editor: vscode.TextEditor | undef
 	const position = editor.selection.active;
 	const functionInfo = resolveFunctionInfo(symbols, position, editor.document, logger);
 	if (logger) {
-		const suspicious =
-			!functionInfo ||
-			functionInfo.functionId === '%2F' ||
-			functionInfo.functionId.startsWith('%2F/') ||
-			functionInfo.functionId.endsWith('/%2F');
-		if (suspicious) {
+		if (!functionInfo) {
 			logger.debug(
-				`lineheat: symbols:suspicious uri=${editor.document.uri.fsPath} position=${position.line + 1}:${position.character} symbols=${symbols.length} top=[${formatSymbolsSummary(symbols)}]`,
+				`lineheat: presence skipped — cursor is outside a tracked symbol (function/class/namespace) uri=${editor.document.uri.fsPath} position=${position.line + 1}:${position.character} symbols=${symbols.length} top=[${formatSymbolsSummary(symbols)}]`,
 			);
+		} else {
+			const suspicious =
+				functionInfo.functionId === '%2F' ||
+				functionInfo.functionId.startsWith('%2F/') ||
+				functionInfo.functionId.endsWith('/%2F');
+			if (suspicious) {
+				logger.debug(
+					`lineheat: symbols:suspicious functionId=${functionInfo.functionId} uri=${editor.document.uri.fsPath} position=${position.line + 1}:${position.character} symbols=${symbols.length} top=[${formatSymbolsSummary(symbols)}]`,
+				);
+			}
 		}
 	}
 	if (!functionInfo) {
