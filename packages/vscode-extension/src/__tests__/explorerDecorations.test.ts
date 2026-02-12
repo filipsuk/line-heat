@@ -8,7 +8,7 @@ import { sha256Hex } from '@line-heat/protocol';
 import { HeatFileDecorationProvider } from '../heatFileDecorationProvider';
 import type { LineHeatSettings } from '../types';
 import { startMockLineHeatServer } from './support/mockLineHeatServer';
-import { runGit, sleep, waitFor, type ExtensionApi } from './support/testUtils';
+import { createTestWorkspace, runGit, sleep, waitFor, type ExtensionApi } from './support/testUtils';
 
 const createMockSettings = (overrides: Partial<LineHeatSettings> = {}): LineHeatSettings => ({
 	serverUrl: 'http://localhost:9999',
@@ -184,6 +184,15 @@ suite('Explorer Heat Decorations', function () {
 		await config.update('emoji', '😎', vscode.ConfigurationTarget.Global);
 		await config.update('explorerDecorations', true, vscode.ConfigurationTarget.Global);
 
+		const tempDir = await createTestWorkspace('line-heat-explorer-disconnect');
+		await runGit(['init'], tempDir);
+		await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
+
+		const filePath = path.join(tempDir, 'hot.ts');
+		await fs.writeFile(filePath, 'const x = 1;\n', 'utf8');
+		const fileUri = vscode.Uri.file(filePath);
+		await runGit(['add', '.'], tempDir);
+
 		const mockServer = await startMockLineHeatServer({
 			token,
 			retentionDays: 7,
@@ -205,15 +214,7 @@ suite('Explorer Heat Decorations', function () {
 		assert.ok(api?.logger, 'Extension did not return logger');
 		api.logger.messages.splice(0, api.logger.messages.length);
 
-		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'line-heat-explorer-disconnect-'));
 		try {
-			await runGit(['init'], tempDir);
-			await runGit(['remote', 'add', 'origin', 'https://github.com/Acme/LineHeat.git'], tempDir);
-
-			const filePath = path.join(tempDir, 'hot.ts');
-			await fs.writeFile(filePath, 'const x = 1;\n', 'utf8');
-			const fileUri = vscode.Uri.file(filePath);
-
 			const doc = await vscode.workspace.openTextDocument(fileUri);
 			await vscode.window.showTextDocument(doc, { preview: false });
 

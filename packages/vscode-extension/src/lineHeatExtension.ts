@@ -381,6 +381,7 @@ const disconnectSocket = () => {
 	activePresence = undefined;
 	roomStateByKey.clear();
 	roomKeyByHashedKey.clear();
+	trackedFilePaths = undefined;
 	retentionDays = getDefaultRetentionDays();
 };
 
@@ -925,7 +926,7 @@ const buildHashIndex = async (logger: LineHeatLogger) => {
 			nextTrackedPaths.add(absPath);
 		}
 	}
-	trackedFilePaths = nextTrackedPaths;
+	trackedFilePaths = folders.length > 0 ? nextTrackedPaths : undefined;
 	const nextIndex = new Map<string, Map<string, vscode.Uri>>();
 	const results = await Promise.all(
 		files.map(async (uri) => {
