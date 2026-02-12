@@ -33,4 +33,11 @@ jobs:
         run: npm run compile-tests -w lineheat-vscode
 
       - name: Run tests
-        run: xvfb-run -a npm test -w lineheat-vscode
+        run: xvfb-run -a npm test -w lineheat-vscode 2>&1 | tee test-output.txt
+
+      - name: Upload test output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-output
+          path: test-output.txt
