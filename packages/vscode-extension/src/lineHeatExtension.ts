@@ -29,7 +29,7 @@ import {
 	resetSymbolState,
 	resolveFunctionInfo,
 } from './symbols';
-import { listTrackedFiles, resolveRepoContext } from './repo';
+import { isFileGitIgnored, listTrackedFiles, resolveRepoContext } from './repo';
 import { HeatCodeLensProvider } from './heatCodeLensProvider';
 import { HeatFileDecorationProvider } from './heatFileDecorationProvider';
 import { checkAndShowOnboarding, openSettings } from './onboarding';
@@ -600,6 +600,15 @@ const refreshActiveRepoState = async (
 		return undefined;
 	}
 
+	// Skip gitignored files
+	if (await isFileGitIgnored(filePath, logger)) {
+		logger.debug(`lineheat: file-gitignored filePath=${filePath}`);
+		activeRepoState = { status: 'ready', context };
+		activeRoomContext = undefined;
+		updateStatusBar();
+		return undefined;
+	}
+
 	activeRepoState = { status: 'ready', context };
 	activeRoomContext = { repoId: context.repoId, filePath: context.filePath };
 	logger.debug(`active repo ${JSON.stringify({ repoId: context.repoId, filePath: context.filePath })}`);
@@ -762,6 +771,10 @@ const updateOpenRoomsFromTabs = async (logger: LineHeatLogger) => {
 				}
 				// Skip disabled repositories
 				if (!isRepositoryEnabled(context.gitRoot, enabledPatterns)) {
+					return undefined;
+				}
+				// Skip gitignored files
+				if (await isFileGitIgnored(uri.fsPath, logger)) {
 					return undefined;
 				}
 				return { repoId: context.repoId, filePath: context.filePath } as RoomContext;
@@ -1054,6 +1067,10 @@ export function activate(context: vscode.ExtensionContext) {
 			// Skip disabled repositories
 			const enabledPatterns = currentSettings?.enabledRepositories ?? [];
 			if (!isRepositoryEnabled(context.gitRoot, enabledPatterns)) {
+				return;
+			}
+			// Skip gitignored files
+			if (await isFileGitIgnored(event.document.uri.fsPath, logger)) {
 				return;
 			}
 			const symbols = await getDocumentSymbols(event.document, logger);

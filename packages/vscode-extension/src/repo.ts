@@ -9,6 +9,7 @@ const gitTimeoutMs = 1500;
 const gitRootCache = new Map<string, Promise<string | undefined>>();
 const repoIdCache = new Map<string, Promise<string | undefined>>();
 const fileRepoCache = new Map<string, Promise<RepoContext | undefined>>();
+const gitIgnoreCache = new Map<string, Promise<boolean>>();
 
 const execFileWithTimeout = async (
 	command: string,
@@ -223,5 +224,20 @@ export const resolveRepoContext = (filePath: string, logger: LineHeatLogger) => 
 		})
 		.catch(() => undefined);
 	fileRepoCache.set(filePath, promise);
+	return promise;
+};
+
+export const isFileGitIgnored = (filePath: string, logger: LineHeatLogger): Promise<boolean> => {
+	const cached = gitIgnoreCache.get(filePath);
+	if (cached) {
+		return cached;
+	}
+	const directory = path.dirname(filePath);
+	const promise = execFileWithTimeout('git', ['check-ignore', '-q', filePath], {
+		cwd: directory,
+	})
+		.then(() => true)
+		.catch(() => false);
+	gitIgnoreCache.set(filePath, promise);
 	return promise;
 };
