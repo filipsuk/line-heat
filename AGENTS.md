@@ -33,6 +33,11 @@
 - Keep business rules in domain modules with minimal dependencies.
 - Keep adapters, IO, and framework code in separate technical layers.
 
+## Performance and Memory
+- Before adding new operations (process spawning, network calls, file I/O), check if existing data or caches can be reused. Prefer O(1) lookups over spawning new processes.
+- Caches and in-memory data structures must not grow unboundedly over the extension's lifetime. Prefer replacing data (e.g., rebuilding a Set on change) over appending to ever-growing collections.
+- When data is already being fetched elsewhere (e.g., `git ls-files` for the hash index), derive additional structures from that same result rather than issuing separate commands.
+
 ## Code Style (provisional until tooling exists)
 - Prefer small, focused functions and modules.
 - Keep files short and cohesive; split when they grow.

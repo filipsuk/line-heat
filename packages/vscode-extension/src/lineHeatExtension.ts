@@ -29,7 +29,7 @@ import {
 	resetSymbolState,
 	resolveFunctionInfo,
 } from './symbols';
-import { isFileGitIgnored, listTrackedFiles, resolveRepoContext } from './repo';
+import { listTrackedFiles, resolveRepoContext } from './repo';
 import { HeatCodeLensProvider } from './heatCodeLensProvider';
 import { HeatFileDecorationProvider } from './heatFileDecorationProvider';
 import { checkAndShowOnboarding, openSettings } from './onboarding';
@@ -72,6 +72,7 @@ let heatFileDecorationProvider: HeatFileDecorationProvider | undefined;
 let repoHeatMap: Map<string, Map<string, number>> | undefined;
 let repoHeatTimer: ReturnType<typeof setInterval> | undefined;
 let hashIndex: Map<string, Map<string, vscode.Uri>> | undefined;
+let trackedFilePaths: Set<string> | undefined;
 let slowRetryTimer: ReturnType<typeof setTimeout> | undefined;
 let lastRepoHeatEmitAt = 0;
 
@@ -600,9 +601,9 @@ const refreshActiveRepoState = async (
 		return undefined;
 	}
 
-	// Skip gitignored files
-	if (await isFileGitIgnored(filePath, logger)) {
-		logger.debug(`lineheat: file-gitignored filePath=${filePath}`);
+	// Skip untracked files (gitignored, etc.)
+	if (trackedFilePaths && !trackedFilePaths.has(filePath)) {
+		logger.debug(`lineheat: file-untracked filePath=${filePath}`);
 		activeRepoState = { status: 'ready', context };
 		activeRoomContext = undefined;
 		updateStatusBar();
@@ -773,8 +774,8 @@ const updateOpenRoomsFromTabs = async (logger: LineHeatLogger) => {
 				if (!isRepositoryEnabled(context.gitRoot, enabledPatterns)) {
 					return undefined;
 				}
-				// Skip gitignored files
-				if (await isFileGitIgnored(uri.fsPath, logger)) {
+				// Skip untracked files (gitignored, etc.)
+				if (trackedFilePaths && !trackedFilePaths.has(uri.fsPath)) {
 					return undefined;
 				}
 				return { repoId: context.repoId, filePath: context.filePath } as RoomContext;
@@ -916,12 +917,15 @@ const buildHashIndex = async (logger: LineHeatLogger) => {
 	const start = Date.now();
 	const folders = vscode.workspace.workspaceFolders ?? [];
 	const files: vscode.Uri[] = [];
+	const nextTrackedPaths = new Set<string>();
 	for (const folder of folders) {
 		const tracked = await listTrackedFiles(folder.uri.fsPath, logger);
 		for (const absPath of tracked) {
 			files.push(vscode.Uri.file(absPath));
+			nextTrackedPaths.add(absPath);
 		}
 	}
+	trackedFilePaths = nextTrackedPaths;
 	const nextIndex = new Map<string, Map<string, vscode.Uri>>();
 	const results = await Promise.all(
 		files.map(async (uri) => {
@@ -1069,8 +1073,8 @@ export function activate(context: vscode.ExtensionContext) {
 			if (!isRepositoryEnabled(context.gitRoot, enabledPatterns)) {
 				return;
 			}
-			// Skip gitignored files
-			if (await isFileGitIgnored(event.document.uri.fsPath, logger)) {
+			// Skip untracked files (gitignored, etc.)
+			if (trackedFilePaths && !trackedFilePaths.has(event.document.uri.fsPath)) {
 				return;
 			}
 			const symbols = await getDocumentSymbols(event.document, logger);
