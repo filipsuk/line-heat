@@ -123,7 +123,8 @@
     "watch:tsc": "tsc --noEmit --watch -p ./",
     "pretest": "npm run compile-tests && npm run lint",
     "lint": "eslint src",
-    "test": "vscode-test"
+    "test": "vscode-test",
+    "release": "./scripts/release.sh"
   },
   "devDependencies": {
     "@line-heat/protocol": "0.0.0",
