@@ -29,7 +29,11 @@ export const createLogger = (level: LogLevel): LineHeatLogger => {
 		messages.push(formatted);
 		capArray(messages);
 		if (logLevelWeight[messageLevel] <= logLevelWeight[currentLevel]) {
-			output.appendLine(formatted);
+			try {
+				output.appendLine(formatted);
+			} catch {
+				// Output channel was disposed (e.g. extension deactivating); ignore.
+			}
 		}
 	};
 
